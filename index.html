@@ -259,17 +259,26 @@ async function fetchTransit(){
 async function fetchRestaurants(){
   if(!loc)return;
   try{
-    const r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&amenity=restaurant&lat=${loc.lat}&lon=${loc.lon}&radius=800&limit=20`);
-    const raw=await r.json();
-    // Sort by distance
-    restaurants=raw.map(p=>({
-      name:p.display_name.split(",")[0],
-      address:p.display_name.split(",").slice(1,3).join(",").trim(),
-      lat:parseFloat(p.lat),lon:parseFloat(p.lon),
-      dist:Math.round(calcDist(loc.lat,loc.lon,parseFloat(p.lat),parseFloat(p.lon))),
-    })).sort((a,b)=>a.dist-b.dist).slice(0,12);
+    const q=`[out:json][timeout:15];(node["amenity"="restaurant"](around:800,${loc.lat},${loc.lon});node["amenity"="cafe"](around:800,${loc.lat},${loc.lon});node["amenity"="fast_food"](around:800,${loc.lat},${loc.lon});node["amenity"="bar"]["food"="yes"](around:800,${loc.lat},${loc.lon}););out body;`;
+    const r=await fetch("https://overpass-api.de/api/interpreter",{method:"POST",body:"data="+encodeURIComponent(q)});
+    const d=await r.json();
+    restaurants=d.elements
+      .filter(e=>e.tags?.name)
+      .map(e=>({
+        name:e.tags.name,
+        type:formatType(e.tags.cuisine||e.tags.amenity||""),
+        dist:Math.round(calcDist(loc.lat,loc.lon,e.lat,e.lon)),
+        opening_hours:e.tags.opening_hours||"",
+        website:e.tags.website||e.tags["contact:website"]||"",
+      }))
+      .sort((a,b)=>a.dist-b.dist)
+      .slice(0,15);
     if(curTab==="mat")renderContent();
   }catch(e){console.error("Restaurant error",e);}
+}
+function formatType(t){
+  const map={restaurant:"Restaurant",cafe:"Kafé",fast_food:"Hurtigmat",bar:"Bar",pizza:"Pizza",burger:"Burger",sushi:"Sushi",asian:"Asiatisk",italian:"Italiensk",norwegian:"Norsk",chinese:"Kinesisk",indian:"Indisk",mexican:"Meksikansk",kebab:"Kebab",bakery:"Bakeri"};
+  return t.split(";").map(s=>map[s.trim()]||s.trim()).filter(Boolean).join(", ");
 }
 
 function calcDist(lat1,lon1,lat2,lon2){
@@ -280,6 +289,36 @@ function calcDist(lat1,lon1,lat2,lon2){
   return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
 
+
+function parseOH(str){
+  if(!str)return null;
+  try{
+    const days=["Su","Mo","Tu","We","Th","Fr","Sa"];
+    const today=days[new Date().getDay()];
+    // Handle simple "Mo-Fr 09:00-22:00; Sa-Su 10:00-20:00" format
+    const parts=str.split(";").map(s=>s.trim());
+    for(const part of parts){
+      const m=part.match(/^([A-Za-z,-]+)\s+(\d{2}:\d{2})-(\d{2}:\d{2})$/);
+      if(!m)continue;
+      const range=m[1];
+      // Check if today is in range
+      const inRange=range.split(",").some(r=>{
+        const dash=r.indexOf("-");
+        if(dash===-1)return r.trim()===today;
+        const s=days.indexOf(r.slice(0,dash).trim()),e=days.indexOf(r.slice(dash+1).trim());
+        const t=days.indexOf(today);
+        return s!==-1&&e!==-1&&t>=s&&t<=e;
+      });
+      if(inRange){
+        const now=new Date().getHours()*60+new Date().getMinutes();
+        const [oh,om]=m[2].split(":").map(Number);
+        const [ch,cm]=m[3].split(":").map(Number);
+        return{open:now>=oh*60+om&&now<ch*60+cm,hours:m[2]+"–"+m[3]};
+      }
+    }
+    return null;
+  }catch(e){return null;}
+}
 function fetchAll(){
   setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter data…</div></div>`);
   weather=null;departures=[];stops=[];restaurants=[];
@@ -344,16 +383,19 @@ function renderContent(){
   } else if(curTab==="mat"){
     if(!loc){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter posisjon…</div></div>`);return;}
     if(!restaurants.length){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter restauranter…</div></div>`);return;}
-    c.innerHTML=`<div class="slabel">Nærmeste steder å spise</div>`+restaurants.map(r=>`
-      <div class="rcard">
+    c.innerHTML=`<div class="slabel">Nærmeste steder å spise</div>`+restaurants.map(r=>{
+      const oh=parseOH(r.opening_hours);
+      return `<div class="rcard">
         <div class="rcard-body">
           <div class="rcard-top">
             <div class="rcard-name">${r.name}</div>
+            <div style="font-size:11px;color:var(--muted);flex-shrink:0">📍 ${r.dist}m</div>
           </div>
-          <div class="rcard-type">${r.address}</div>
-          <div class="rcard-hours" style="color:var(--muted)">📍 ${r.dist} m unna</div>
+          ${r.type?`<div class="rcard-type">${r.type}</div>`:''}
+          ${oh?`<div class="rcard-hours">${oh.open?'<span class="open">Åpent nå</span>':'<span class="closed">Stengt</span>'}<span style="color:var(--muted)"> · ${oh.hours}</span></div>`:''}
         </div>
-      </div>`).join("");
+      </div>`;
+    }).join("");
   } else if(curTab==="vaer"){
     if(!weather){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter vær…</div></div>`);return;}
     const cur=weather.current?.data;
