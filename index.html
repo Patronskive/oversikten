@@ -170,6 +170,12 @@
 <script>
 const WI={clearsky:"☀️",fair:"🌤️",partlycloudy:"⛅",cloudy:"☁️",rainshowers:"🌦️",rain:"🌧️",heavyrain:"🌧️",snow:"❄️",sleet:"🌨️",fog:"🌫️",thunder:"⛈️"};
 const MI={bus:"🚌",tram:"🚊",rail:"🚆",metro:"🚇",water:"⛴️",ferry:"⛴️"};
+
+function fetchWithTimeout(url, options={}, ms=8000){
+  const controller=new AbortController();
+  const id=setTimeout(()=>controller.abort(),ms);
+  return fetch(url,{...options,signal:controller.signal}).finally(()=>clearTimeout(id));
+}
 function wi(s){if(!s)return"🌤️";const k=Object.keys(WI).find(k=>s.toLowerCase().includes(k));return k?WI[k]:"🌤️";}
 function mi(m){return MI[m?.toLowerCase()]||"🚌";}
 function fmt(iso){if(!iso)return"";return new Date(iso).toLocaleTimeString("no-NO",{hour:"2-digit",minute:"2-digit"});}
@@ -232,7 +238,7 @@ function showLocError(msg){
 async function fetchWeather(){
   if(!loc)return;
   try{
-    const r=await fetch(`https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${loc.lat.toFixed(4)}&lon=${loc.lon.toFixed(4)}`,{headers:{"User-Agent":"Oversikten/1.0 github.com/Patronskive/oversikten"}});
+    const r=await fetchWithTimeout(`https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${loc.lat.toFixed(4)}&lon=${loc.lon.toFixed(4)}`,{headers:{"User-Agent":"Oversikten/1.0 github.com/Patronskive/oversikten"}},8000);
     const d=await r.json();
     weather={current:d.properties?.timeseries?.[0],hours:d.properties?.timeseries?.slice(0,13)||[]};
     renderHeader();
@@ -244,7 +250,7 @@ async function fetchTransit(){
   if(!loc)return;
   const q=`{stopPlacesByRadius(latitude:${loc.lat},longitude:${loc.lon},radius:600,size:10){edges{node{distance place{id name latitude longitude estimatedCalls(timeRange:3600,numberOfDepartures:10){expectedDepartureTime destinationDisplay{frontText}serviceJourney{line{publicCode transportMode}}realtime}}}}}}`;
   try{
-    const r=await fetch("https://api.entur.io/journey-planner/v3/graphql",{method:"POST",headers:{"Content-Type":"application/json","ET-Client-Name":"oversikten-app"},body:JSON.stringify({query:q})});
+    const r=await fetchWithTimeout("https://api.entur.io/journey-planner/v3/graphql",{method:"POST",headers:{"Content-Type":"application/json","ET-Client-Name":"oversikten-app"},body:JSON.stringify({query:q})},8000);
     const d=await r.json();
     const edges=(d.data?.stopPlacesByRadius?.edges||[]);
     const raw=edges
@@ -263,7 +269,7 @@ async function fetchRestaurants(){
   if(!loc)return;
   try{
     const q=`[out:json][timeout:15];(node["amenity"="restaurant"](around:800,${loc.lat},${loc.lon});node["amenity"="cafe"](around:800,${loc.lat},${loc.lon});node["amenity"="fast_food"](around:800,${loc.lat},${loc.lon});node["amenity"="bar"]["food"="yes"](around:800,${loc.lat},${loc.lon}););out body;`;
-    const r=await fetch("https://overpass-api.de/api/interpreter",{method:"POST",body:"data="+encodeURIComponent(q)});
+    const r=await fetchWithTimeout("https://overpass-api.de/api/interpreter",{method:"POST",body:"data="+encodeURIComponent(q)},10000);
     const d=await r.json();
     restaurants=d.elements
       .filter(e=>e.tags?.name)
@@ -327,7 +333,6 @@ function fetchAll(){
   weather=null;departures=[];stops=[];restaurants=[];
   fetchWeather();
   fetchTransit();
-  fetchRestaurants();
 }
 
 function refresh(){
@@ -366,7 +371,8 @@ function setTab(t){
   curTab=t;
   document.querySelectorAll(".tab").forEach(el=>el.classList.remove("active"));
   document.getElementById("tab-"+t).classList.add("active");
-  renderContent();
+  if(t==="mat"&&!restaurants.length&&loc)fetchRestaurants();
+  else renderContent();
 }
 
 function renderContent(){
