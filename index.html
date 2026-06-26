@@ -209,17 +209,17 @@ function initLoc(){
       loc={lat:p.coords.latitude,lon:p.coords.longitude};
       document.getElementById("fab").style.display="flex";
       // Reverse geocode via nominatim
-      try{
-        const r=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${loc.lat}&lon=${loc.lon}&format=json`);
-        const d=await r.json();
-        const neighborhood=d.address?.neighbourhood||d.address?.suburb||d.address?.city_district||"";
-        const city=d.address?.city||d.address?.town||"";
-        document.getElementById("place-name").childNodes[0].textContent=neighborhood||city;
-        document.getElementById("place-sub").textContent=neighborhood?city:"";
-        document.getElementById("loc-label").innerHTML=`<i class="ti ti-map-pin" style="font-size:13px"></i> ${neighborhood||city}${neighborhood&&city?", "+city:""}`;
-      }catch(e){
-        document.getElementById("place-name").childNodes[0].textContent="Din lokasjon";
-      }
+      document.getElementById("place-name").childNodes[0].textContent="Din lokasjon";
+      document.getElementById("loc-label").innerHTML=`<i class="ti ti-map-pin" style="font-size:13px"></i> ${loc.lat.toFixed(4)}, ${loc.lon.toFixed(4)}`;
+      // Reverse geocode in background, non-blocking
+      fetchWithTimeout(`https://nominatim.openstreetmap.org/reverse?lat=${loc.lat}&lon=${loc.lon}&format=json`,{headers:{"User-Agent":"Oversikten/1.0"}},5000)
+        .then(r=>r.json()).then(d=>{
+          const nb=d.address?.neighbourhood||d.address?.suburb||d.address?.city_district||"";
+          const city=d.address?.city||d.address?.town||"";
+          document.getElementById("place-name").childNodes[0].textContent=nb||city||"Din lokasjon";
+          document.getElementById("place-sub").textContent=nb&&city?city:"";
+          document.getElementById("loc-label").innerHTML=`<i class="ti ti-map-pin" style="font-size:13px"></i> ${nb||city||"Din lokasjon"}`;
+        }).catch(()=>{});
       fetchAll();
     },
     e=>{showLocError("Tillat lokasjon i nettleseren og last siden på nytt.");},
