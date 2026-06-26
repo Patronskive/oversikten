@@ -173,6 +173,32 @@ function fetchWithTimeout(url, options={}, ms=8000){
   const id=setTimeout(()=>controller.abort(),ms);
   return fetch(url,{...options,signal:controller.signal}).finally(()=>clearTimeout(id));
 }
+
+async function fetchBikes(){
+  if(!loc)return;
+  try{
+    const [infoRes, statusRes] = await Promise.all([
+      fetchWithTimeout("https://gbfs.urbansharing.com/oslobysykkel.no/station_information.json",{headers:{"Client-Identifier":"johansguide-app"}},6000),
+      fetchWithTimeout("https://gbfs.urbansharing.com/oslobysykkel.no/station_status.json",{headers:{"Client-Identifier":"johansguide-app"}},6000)
+    ]);
+    const info = await infoRes.json();
+    const status = await statusRes.json();
+    const statusMap={};
+    (status.data?.stations||[]).forEach(s=>statusMap[s.station_id]=s);
+    bikes=(info.data?.stations||[])
+      .map(s=>({
+        id:s.station_id,
+        name:s.name,
+        lat:s.lat, lon:s.lon,
+        dist:Math.round(calcDist(loc.lat,loc.lon,s.lat,s.lon)),
+        bikes:statusMap[s.station_id]?.num_bikes_available??0,
+        docks:statusMap[s.station_id]?.num_docks_available??0,
+      }))
+      .filter(s=>s.dist<=1000)
+      .sort((a,b)=>a.dist-b.dist)
+      .slice(0,5);
+  }catch(e){console.error("Bikes error",e);}
+}
 function wi(s){if(!s)return"🌤️";const k=Object.keys(WI).find(k=>s.toLowerCase().includes(k));return k?WI[k]:"🌤️";}
 function mi(m){return MI[m?.toLowerCase()]||"🚌";}
 function fmt(iso){if(!iso)return"";return new Date(iso).toLocaleTimeString("no-NO",{hour:"2-digit",minute:"2-digit"});}
@@ -199,7 +225,7 @@ function todayHours(hours){
   return line.replace(today+": ","");
 }
 
-let loc=null, weather=null, departures=[], stops=[], restaurants=[], attractions=[], curTab="avg";
+let loc=null, weather=null, departures=[], stops=[], restaurants=[], attractions=[], bikes=[], curTab="avg";
 let fetchingAttractions=false;
 
 // Geolocation
@@ -413,9 +439,10 @@ function parseOH(str){
 }
 function fetchAll(){
   setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter data…</div></div>`);
-  weather=null;departures=[];stops=[];restaurants=[];attractions=[];
+  weather=null;departures=[];stops=[];restaurants=[];attractions=[];bikes=[];
   fetchWeather();
   fetchTransit();
+  fetchBikes();
 }
 
 function refresh(){
@@ -464,6 +491,20 @@ function renderContent(){
   if(curTab==="avg"){
     if(!loc){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter posisjon…</div></div>`);return;}
     if(!departures.length){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter avganger…</div></div>`);return;}
+    const bikeHtml=bikes.length?`
+      <div class="slabel" style="margin-top:18px">Bysykkel</div>`+
+      bikes.map(b=>`
+        <div class="dep">
+          <div class="lbadge" style="font-size:18px">🚲</div>
+          <div style="flex:1;min-width:0">
+            <div class="dep-dest">${b.name}</div>
+            <div class="dep-stop">${b.dist}m unna</div>
+          </div>
+          <div class="dep-right">
+            <div style="font-size:14px;font-weight:700;color:${b.bikes>0?'var(--success)':'var(--danger)'}">${b.bikes} ledig</div>
+            <div class="dep-clock">${b.docks} lås</div>
+          </div>
+        </div>`).join(""):"";
     c.innerHTML=`<div class="slabel">Neste avganger</div>`+departures.map(dep=>{
       const m=minsUntil(dep.time);
       const soon=m==="nå"||(typeof m==="string"&&parseInt(m)<=3);
@@ -472,7 +513,7 @@ function renderContent(){
         <div style="flex:1;min-width:0"><div class="dep-dest">${dep.dest||"–"}</div><div class="dep-stop">${dep.stop}${dep.dist?` · ${dep.dist}m`:""}</div></div>
         <div class="dep-right"><div class="dep-mins">${m}</div><div class="dep-clock">${fmt(dep.time)}</div></div>
       </div>`;
-    }).join("");
+    }).join("")+bikeHtml;
   } else if(curTab==="mat"){
     if(!loc){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter posisjon…</div></div>`);return;}
     if(!restaurants.length){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter restauranter…</div></div>`);return;}
