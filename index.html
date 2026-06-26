@@ -248,21 +248,31 @@ async function fetchWeather(){
 
 async function fetchTransit(){
   if(!loc)return;
-  const q=`{stopPlacesByRadius(latitude:${loc.lat},longitude:${loc.lon},radius:600,size:10){edges{node{distance place{id name latitude longitude estimatedCalls(timeRange:3600,numberOfDepartures:10){expectedDepartureTime destinationDisplay{frontText}serviceJourney{line{publicCode transportMode}}realtime}}}}}}`;
+  const pad=0.008;
+  const minLat=loc.lat-pad, maxLat=loc.lat+pad, minLon=loc.lon-pad, maxLon=loc.lon+pad;
+  const q=`{stopPlacesByBbox(minimumLatitude:${minLat},maximumLatitude:${maxLat},minimumLongitude:${minLon},maximumLongitude:${maxLon}){id name latitude longitude estimatedCalls(timeRange:3600,numberOfDepartures:10){expectedDepartureTime destinationDisplay{frontText}serviceJourney{line{publicCode transportMode}}realtime}}}`;
   try{
     const r=await fetchWithTimeout("https://api.entur.io/journey-planner/v3/graphql",{method:"POST",headers:{"Content-Type":"application/json","ET-Client-Name":"oversikten-app"},body:JSON.stringify({query:q})},8000);
-    const d=await r.json();
-    const edges=(d.data?.stopPlacesByRadius?.edges||[]);
-    const raw=edges
-      .filter(e=>e.node?.place?.estimatedCalls?.length)
-      .map(e=>({...e.node.place,dist:e.node.distance}));
+    const data=await r.json();
+    const raw=(data.data?.stopPlacesByBbox||[])
+      .filter(s=>s.estimatedCalls?.length&&s.latitude)
+      .map(s=>({...s,dist:Math.round(calcDist(loc.lat,loc.lon,s.latitude,s.longitude))}))
+      .sort((a,b)=>a.dist-b.dist);
     const all=[];
-    raw.forEach(s=>s.estimatedCalls.forEach(c=>all.push({stop:s.name,dist:s.dist,time:c.expectedDepartureTime,dest:c.destinationDisplay?.frontText,line:c.serviceJourney?.line?.publicCode,mode:c.serviceJourney?.line?.transportMode})));
+    raw.forEach(s=>s.estimatedCalls.forEach(c=>all.push({
+      stop:s.name,dist:s.dist,time:c.expectedDepartureTime,
+      dest:c.destinationDisplay?.frontText,
+      line:c.serviceJourney?.line?.publicCode,
+      mode:c.serviceJourney?.line?.transportMode
+    })));
     all.sort((a,b)=>new Date(a.time)-new Date(b.time));
     departures=all.slice(0,30);
     stops=raw.slice(0,6);
     if(curTab==="avg"||curTab==="stopp")renderContent();
-  }catch(e){console.error("Transit error",e);}
+  }catch(e){
+    console.error("Transit error",e);
+    if(curTab==="avg"||curTab==="stopp")setContent(`<div class="errcard"><div class="etitle">Kunne ikke hente avganger</div><div class="ebody">Prøv igjen om litt.</div></div>`);
+  }
 }
 
 async function fetchRestaurants(){
