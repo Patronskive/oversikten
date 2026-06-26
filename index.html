@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Oversikten</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0d0f1a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0d0f1a;
+    --surface: #161929;
+    --surface2: #1e2235;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.12);
+    --text: #e4e7f2;
+    --muted: #5a6080;
+    --accent: #5b7fff;
+    --accent-dim: rgba(91,127,255,0.15);
+    --accent-border: rgba(91,127,255,0.35);
+    --success: #34d399;
+    --warn: #fbbf24;
+    --danger: #f87171;
+  }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  body { display: flex; flex-direction: column; max-width: 480px; margin: 0 auto; min-height: 100vh; }
+
+  /* HEADER */
+  .header { padding: 20px 18px 0; background: linear-gradient(170deg, #12162a 0%, var(--bg) 100%); flex-shrink: 0; }
+  .header-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
+  .header-left .eyebrow { font-size: 10px; font-weight: 700; letter-spacing: .18em; color: var(--accent); text-transform: uppercase; margin-bottom: 5px; }
+  .header-left .place { font-size: 22px; font-weight: 700; letter-spacing: -.03em; line-height: 1.1; }
+  .header-left .place span { font-size: 13px; font-weight: 400; color: var(--muted); display: block; margin-top: 3px; }
+  .weather-badge { background: var(--surface); border: 1px solid var(--border2); border-radius: 14px; padding: 10px 14px; text-align: center; flex-shrink: 0; min-width: 68px; display: none; }
+  .weather-badge .wb-icon { font-size: 26px; line-height: 1; }
+  .weather-badge .wb-temp { font-size: 19px; font-weight: 700; margin-top: 3px; }
+  .weather-badge .wb-wind { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+  /* HOUR STRIP */
+  .hour-strip { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 14px; scrollbar-width: none; }
+  .hour-strip::-webkit-scrollbar { display: none; }
+  .hcard { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 7px 9px; text-align: center; flex-shrink: 0; min-width: 50px; }
+  .hcard.now { background: var(--accent-dim); border-color: var(--accent-border); }
+  .hcard .ht { font-size: 10px; color: var(--muted); font-weight: 600; margin-bottom: 3px; }
+  .hcard.now .ht { color: var(--accent); }
+  .hcard .hi { font-size: 17px; }
+  .hcard .htemp { font-size: 13px; font-weight: 600; margin-top: 3px; }
+  .hcard .hrain { font-size: 10px; color: #60a5fa; margin-top: 2px; }
+
+  /* TABS */
+  .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--bg); position: sticky; top: 0; z-index: 20; flex-shrink: 0; }
+  .tab { flex: 1; background: none; border: none; border-bottom: 2px solid transparent; color: var(--muted); cursor: pointer; font-size: 11px; font-weight: 600; padding: 11px 4px 9px; display: flex; flex-direction: column; align-items: center; gap: 3px; transition: color .15s; letter-spacing: .02em; }
+  .tab.active { border-bottom-color: var(--accent); color: var(--accent); }
+  .tab .ti { font-size: 19px; }
+
+  /* CONTENT */
+  .content { flex: 1; padding: 14px 16px 90px; overflow-y: auto; }
+
+  /* DEPARTURE CARDS */
+  .dep { background: var(--surface); border-radius: 13px; padding: 12px 14px; display: flex; align-items: center; gap: 11px; border: 1px solid var(--border); margin-bottom: 7px; transition: border-color .2s; }
+  .dep.soon { border-color: var(--accent-border); }
+  .lbadge { background: var(--surface2); border: 1px solid var(--border2); border-radius: 9px; padding: 5px 9px; font-size: 12px; font-weight: 800; flex-shrink: 0; min-width: 50px; text-align: center; }
+  .dep.soon .lbadge { background: var(--accent-dim); border-color: var(--accent-border); color: #a5b4fc; }
+  .dep-dest { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dep-stop { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .dep-right { text-align: right; flex-shrink: 0; }
+  .dep-mins { font-size: 15px; font-weight: 800; }
+  .dep.soon .dep-mins { color: #818cf8; }
+  .dep-clock { font-size: 11px; color: var(--muted); }
+
+  /* STOP CARDS */
+  .stopcard { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
+  .stopcard-name { display: flex; align-items: center; gap: 9px; margin-bottom: 11px; font-weight: 700; font-size: 15px; }
+  .stop-dot { background: var(--accent-dim); border: 1px solid var(--accent-border); border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 14px; }
+  .minidep { display: flex; align-items: center; gap: 9px; padding: 7px 9px; background: var(--bg); border-radius: 9px; margin-bottom: 5px; }
+  .minidep:last-child { margin-bottom: 0; }
+  .minibadge { background: var(--surface2); border: 1px solid var(--border2); border-radius: 6px; padding: 2px 7px; font-size: 11px; font-weight: 800; flex-shrink: 0; }
+  .minidest { flex: 1; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #b0b4c8; }
+  .minitime { font-size: 12px; font-weight: 800; color: #818cf8; flex-shrink: 0; }
+
+  /* WEATHER */
+  .wcard { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin-bottom: 12px; }
+  .wcard-label { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .12em; margin-bottom: 12px; }
+  .whero { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+  .wbig { font-size: 52px; font-weight: 800; letter-spacing: -.04em; line-height: 1; }
+  .wstats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 9px; }
+  .wstat { background: var(--bg); border-radius: 10px; padding: 10px 8px; text-align: center; }
+  .wstat-icon { font-size: 20px; margin-bottom: 3px; }
+  .wstat-val { font-size: 14px; font-weight: 700; }
+  .wstat-label { font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .frow { display: flex; align-items: center; gap: 11px; padding: 9px 0; border-bottom: 1px solid var(--border); }
+  .frow:last-child { border-bottom: none; }
+  .ftime { font-size: 12px; color: var(--muted); width: 36px; flex-shrink: 0; }
+  .ficon { font-size: 20px; flex-shrink: 0; }
+  .fdetail { flex: 1; font-size: 11px; color: var(--muted); }
+  .ftemp { font-size: 14px; font-weight: 700; }
+
+  /* RESTAURANT CARDS */
+  .rcard { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; margin-bottom: 10px; display: flex; flex-direction: column; }
+  .rcard-body { padding: 13px 14px; }
+  .rcard-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 6px; }
+  .rcard-name { font-size: 15px; font-weight: 700; line-height: 1.2; }
+  .rcard-rating { background: var(--accent-dim); border: 1px solid var(--accent-border); border-radius: 7px; padding: 3px 8px; font-size: 12px; font-weight: 700; color: #a5b4fc; flex-shrink: 0; }
+  .rcard-type { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  .rcard-hours { font-size: 12px; display: flex; align-items: center; gap: 5px; }
+  .rcard-hours .open { color: var(--success); font-weight: 600; }
+  .rcard-hours .closed { color: var(--danger); font-weight: 600; }
+
+  /* EMPTY / SPINNER */
+  .empty { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 32px; text-align: center; color: var(--muted); }
+  .empty .eicon { font-size: 36px; margin-bottom: 10px; }
+  .spinner { text-align: center; padding: 52px; color: var(--muted); }
+  .spinner .sicon { font-size: 36px; margin-bottom: 12px; animation: spin 1.2s linear infinite; display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* FAB */
+  .fab { position: fixed; bottom: 22px; right: 18px; background: var(--accent); border: none; border-radius: 50%; width: 52px; height: 52px; font-size: 21px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 20px rgba(91,127,255,.45); z-index: 30; }
+
+  /* ERROR */
+  .errcard { background: rgba(248,113,113,.08); border: 1px solid rgba(248,113,113,.25); border-radius: 14px; padding: 20px; text-align: center; margin-bottom: 12px; }
+  .errcard .etitle { color: var(--danger); font-weight: 700; margin-bottom: 6px; }
+  .errcard .ebody { font-size: 13px; color: var(--muted); line-height: 1.5; }
+
+  /* BOTTOM BAR */
+  .bottom-bar { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px; padding: 10px 18px 18px; background: linear-gradient(0deg, var(--bg) 60%, transparent); display: flex; justify-content: space-between; align-items: center; z-index: 25; pointer-events: none; }
+  .loc-label { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 5px; pointer-events: all; }
+  .loc-label span { color: var(--text); font-weight: 500; }
+
+  /* SECTION LABEL */
+  .slabel { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .12em; margin-bottom: 10px; margin-top: 4px; }
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+</head>
+<body>
+
+<div class="header">
+  <div class="header-top">
+    <div class="header-left">
+      <div class="eyebrow">Oversikten</div>
+      <div class="place" id="place-name">Henter posisjon…<span id="place-sub"></span></div>
+    </div>
+    <div class="weather-badge" id="weather-badge">
+      <div class="wb-icon" id="wb-icon"></div>
+      <div class="wb-temp" id="wb-temp"></div>
+      <div class="wb-wind" id="wb-wind"></div>
+    </div>
+  </div>
+  <div class="hour-strip" id="hour-strip"></div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="setTab('avg')" id="tab-avg"><i class="ti ti-bus ti"></i>Avganger</button>
+  <button class="tab" onclick="setTab('mat')" id="tab-mat"><i class="ti ti-tools-kitchen-2 ti"></i>Spise</button>
+  <button class="tab" onclick="setTab('vaer')" id="tab-vaer"><i class="ti ti-cloud ti"></i>Vær</button>
+  <button class="tab" onclick="setTab('stopp')" id="tab-stopp"><i class="ti ti-map-pin ti"></i>Stopp</button>
+</div>
+
+<div class="content" id="content">
+  <div class="spinner"><span class="sicon">⟳</span><div>Henter posisjon…</div></div>
+</div>
+
+<div class="bottom-bar">
+  <div class="loc-label" id="loc-label"></div>
+</div>
+<button class="fab" id="fab" style="display:none" onclick="refresh()" aria-label="Oppdater">↻</button>
+
+<script>
+const WI={clearsky:"☀️",fair:"🌤️",partlycloudy:"⛅",cloudy:"☁️",rainshowers:"🌦️",rain:"🌧️",heavyrain:"🌧️",snow:"❄️",sleet:"🌨️",fog:"🌫️",thunder:"⛈️"};
+const MI={bus:"🚌",tram:"🚊",rail:"🚆",metro:"🚇",water:"⛴️",ferry:"⛴️"};
+function wi(s){if(!s)return"🌤️";const k=Object.keys(WI).find(k=>s.toLowerCase().includes(k));return k?WI[k]:"🌤️";}
+function mi(m){return MI[m?.toLowerCase()]||"🚌";}
+function fmt(iso){if(!iso)return"";return new Date(iso).toLocaleTimeString("no-NO",{hour:"2-digit",minute:"2-digit"});}
+function minsUntil(iso){if(!iso)return"–";const d=Math.round((new Date(iso)-Date.now())/60000);if(d<=0)return"nå";return d===1?"1 min":`${d} min`;}
+function isOpenNow(hours){
+  if(!hours||!hours.length)return null;
+  const days=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  const today=days[new Date().getDay()];
+  const line=hours.find(h=>h.startsWith(today));
+  if(!line||line.includes("Closed"))return false;
+  const m=line.match(/(\d+):(\d+)\s*(AM|PM)\s*[–-]\s*(\d+):(\d+)\s*(AM|PM)/i);
+  if(!m)return null;
+  const to24=(h,min,ap)=>{let hh=parseInt(h);if(ap.toUpperCase()==="PM"&&hh!==12)hh+=12;if(ap.toUpperCase()==="AM"&&hh===12)hh=0;return hh*60+parseInt(min);};
+  const now=new Date().getHours()*60+new Date().getMinutes();
+  const open=to24(m[1],m[2],m[3]),close=to24(m[4],m[5],m[6]);
+  return now>=open&&now<close;
+}
+function todayHours(hours){
+  if(!hours||!hours.length)return"";
+  const days=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  const today=days[new Date().getDay()];
+  const line=hours.find(h=>h.startsWith(today));
+  if(!line)return"";
+  return line.replace(today+": ","");
+}
+
+let loc=null, weather=null, departures=[], stops=[], restaurants=[], curTab="avg";
+
+// Geolocation
+function initLoc(){
+  if(!navigator.geolocation){showLocError("Nettleseren støtter ikke lokasjon.");return;}
+  navigator.geolocation.getCurrentPosition(
+    async p=>{
+      loc={lat:p.coords.latitude,lon:p.coords.longitude};
+      document.getElementById("fab").style.display="flex";
+      // Reverse geocode via nominatim
+      try{
+        const r=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${loc.lat}&lon=${loc.lon}&format=json`);
+        const d=await r.json();
+        const neighborhood=d.address?.neighbourhood||d.address?.suburb||d.address?.city_district||"";
+        const city=d.address?.city||d.address?.town||"";
+        document.getElementById("place-name").childNodes[0].textContent=neighborhood||city;
+        document.getElementById("place-sub").textContent=neighborhood?city:"";
+        document.getElementById("loc-label").innerHTML=`<i class="ti ti-map-pin" style="font-size:13px"></i> ${neighborhood||city}${neighborhood&&city?", "+city:""}`;
+      }catch(e){
+        document.getElementById("place-name").childNodes[0].textContent="Din lokasjon";
+      }
+      fetchAll();
+    },
+    e=>{showLocError("Tillat lokasjon i nettleseren og last siden på nytt.");},
+    {enableHighAccuracy:true,timeout:12000}
+  );
+}
+
+function showLocError(msg){
+  document.getElementById("place-name").childNodes[0].textContent="Ingen posisjon";
+  document.getElementById("content").innerHTML=`<div class="errcard"><div class="etitle">📍 Lokasjonstilgang mangler</div><div class="ebody">${msg}</div></div>`;
+}
+
+async function fetchWeather(){
+  if(!loc)return;
+  try{
+    const r=await fetch(`https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${loc.lat.toFixed(4)}&lon=${loc.lon.toFixed(4)}`,{headers:{"User-Agent":"Oversikten/1.0 github.com/Patronskive/oversikten"}});
+    const d=await r.json();
+    weather={current:d.properties?.timeseries?.[0],hours:d.properties?.timeseries?.slice(0,13)||[]};
+    renderHeader();
+    if(curTab==="vaer")renderContent();
+  }catch(e){console.error("Weather error",e);}
+}
+
+async function fetchTransit(){
+  if(!loc)return;
+  const q=`{stopPlacesByBbox(minimumLatitude:${loc.lat-0.012},maximumLatitude:${loc.lat+0.012},minimumLongitude:${loc.lon-0.018},maximumLongitude:${loc.lon+0.018}){id name estimatedCalls(timeRange:3600,numberOfDepartures:12){expectedDepartureTime destinationDisplay{frontText}serviceJourney{line{publicCode transportMode}}realtime}}}`;
+  try{
+    const r=await fetch("https://api.entur.io/journey-planner/v3/graphql",{method:"POST",headers:{"Content-Type":"application/json","ET-Client-Name":"oversikten-app"},body:JSON.stringify({query:q})});
+    const d=await r.json();
+    const raw=(d.data?.stopPlacesByBbox||[]).filter(s=>s.estimatedCalls?.length);
+    const all=[];
+    raw.forEach(s=>s.estimatedCalls.forEach(c=>all.push({stop:s.name,time:c.expectedDepartureTime,dest:c.destinationDisplay?.frontText,line:c.serviceJourney?.line?.publicCode,mode:c.serviceJourney?.line?.transportMode})));
+    all.sort((a,b)=>new Date(a.time)-new Date(b.time));
+    departures=all.slice(0,30);
+    stops=raw.slice(0,6);
+    if(curTab==="avg"||curTab==="stopp")renderContent();
+  }catch(e){console.error("Transit error",e);}
+}
+
+async function fetchRestaurants(){
+  if(!loc)return;
+  try{
+    const r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&amenity=restaurant&lat=${loc.lat}&lon=${loc.lon}&radius=800&limit=20`);
+    const raw=await r.json();
+    // Sort by distance
+    restaurants=raw.map(p=>({
+      name:p.display_name.split(",")[0],
+      address:p.display_name.split(",").slice(1,3).join(",").trim(),
+      lat:parseFloat(p.lat),lon:parseFloat(p.lon),
+      dist:Math.round(calcDist(loc.lat,loc.lon,parseFloat(p.lat),parseFloat(p.lon))),
+    })).sort((a,b)=>a.dist-b.dist).slice(0,12);
+    if(curTab==="mat")renderContent();
+  }catch(e){console.error("Restaurant error",e);}
+}
+
+function calcDist(lat1,lon1,lat2,lon2){
+  const R=6371000;
+  const dLat=(lat2-lat1)*Math.PI/180;
+  const dLon=(lon2-lon1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+function fetchAll(){
+  setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter data…</div></div>`);
+  weather=null;departures=[];stops=[];restaurants=[];
+  fetchWeather();
+  fetchTransit();
+  fetchRestaurants();
+}
+
+function refresh(){
+  fetchAll();
+}
+
+function renderHeader(){
+  if(!weather)return;
+  const cur=weather.current?.data;
+  const temp=cur?.instant?.details?.air_temperature;
+  const sym=cur?.next_1_hours?.summary?.symbol_code||cur?.next_6_hours?.summary?.symbol_code;
+  const wind=cur?.instant?.details?.wind_speed;
+  if(temp!=null){
+    const b=document.getElementById("weather-badge");
+    b.style.display="block";
+    document.getElementById("wb-icon").textContent=wi(sym);
+    document.getElementById("wb-temp").textContent=Math.round(temp)+"°";
+    document.getElementById("wb-wind").textContent=wind!=null?"💨 "+Math.round(wind)+" m/s":"";
+  }
+  document.getElementById("hour-strip").innerHTML=weather.hours.map((ts,i)=>{
+    const t=ts.data?.instant?.details?.air_temperature;
+    const s=ts.data?.next_1_hours?.summary?.symbol_code;
+    const p=ts.data?.next_1_hours?.details?.precipitation_amount;
+    return `<div class="hcard${i===0?" now":""}">
+      <div class="ht">${i===0?"nå":new Date(ts.time).toLocaleTimeString("no-NO",{hour:"2-digit",minute:"2-digit"})}</div>
+      <div class="hi">${wi(s)}</div>
+      <div class="htemp">${Math.round(t)}°</div>
+      ${p>0?`<div class="hrain">${p}mm</div>`:""}
+    </div>`;
+  }).join("");
+}
+
+function setContent(html){document.getElementById("content").innerHTML=html;}
+
+function setTab(t){
+  curTab=t;
+  document.querySelectorAll(".tab").forEach(el=>el.classList.remove("active"));
+  document.getElementById("tab-"+t).classList.add("active");
+  renderContent();
+}
+
+function renderContent(){
+  const c=document.getElementById("content");
+  if(curTab==="avg"){
+    if(!loc){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter posisjon…</div></div>`);return;}
+    if(!departures.length){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter avganger…</div></div>`);return;}
+    c.innerHTML=`<div class="slabel">Neste avganger</div>`+departures.map(dep=>{
+      const m=minsUntil(dep.time);
+      const soon=m==="nå"||(typeof m==="string"&&parseInt(m)<=3);
+      return `<div class="dep${soon?" soon":""}">
+        <div class="lbadge">${mi(dep.mode)}${dep.line}</div>
+        <div style="flex:1;min-width:0"><div class="dep-dest">${dep.dest||"–"}</div><div class="dep-stop">${dep.stop}</div></div>
+        <div class="dep-right"><div class="dep-mins">${m}</div><div class="dep-clock">${fmt(dep.time)}</div></div>
+      </div>`;
+    }).join("");
+  } else if(curTab==="mat"){
+    if(!loc){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter posisjon…</div></div>`);return;}
+    if(!restaurants.length){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter restauranter…</div></div>`);return;}
+    c.innerHTML=`<div class="slabel">Nærmeste steder å spise</div>`+restaurants.map(r=>`
+      <div class="rcard">
+        <div class="rcard-body">
+          <div class="rcard-top">
+            <div class="rcard-name">${r.name}</div>
+          </div>
+          <div class="rcard-type">${r.address}</div>
+          <div class="rcard-hours" style="color:var(--muted)">📍 ${r.dist} m unna</div>
+        </div>
+      </div>`).join("");
+  } else if(curTab==="vaer"){
+    if(!weather){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter vær…</div></div>`);return;}
+    const cur=weather.current?.data;
+    const temp=cur?.instant?.details?.air_temperature;
+    const sym=cur?.next_1_hours?.summary?.symbol_code||cur?.next_6_hours?.summary?.symbol_code;
+    const wind=cur?.instant?.details?.wind_speed;
+    const rain=cur?.next_1_hours?.details?.precipitation_amount;
+    const hum=cur?.instant?.details?.relative_humidity;
+    c.innerHTML=`
+      <div class="wcard">
+        <div class="wcard-label">Nå</div>
+        <div class="whero">
+          <div style="font-size:54px;line-height:1">${wi(sym)}</div>
+          <div><div class="wbig">${Math.round(temp)}°</div><div style="font-size:13px;color:var(--muted);margin-top:4px">Celsius</div></div>
+        </div>
+        <div class="wstats">
+          <div class="wstat"><div class="wstat-icon">💨</div><div class="wstat-val">${wind!=null?Math.round(wind)+" m/s":"–"}</div><div class="wstat-label">Vind</div></div>
+          <div class="wstat"><div class="wstat-icon">🌧️</div><div class="wstat-val">${rain!=null?rain+" mm":"0 mm"}</div><div class="wstat-label">Nedbør</div></div>
+          <div class="wstat"><div class="wstat-icon">💧</div><div class="wstat-val">${hum!=null?Math.round(hum)+"%":"–"}</div><div class="wstat-label">Fuktighet</div></div>
+        </div>
+      </div>
+      <div class="wcard">
+        <div class="wcard-label">Neste 12 timer</div>
+        ${weather.hours.slice(1).map(ts=>{
+          const t=ts.data?.instant?.details?.air_temperature;
+          const s=ts.data?.next_1_hours?.summary?.symbol_code;
+          const p=ts.data?.next_1_hours?.details?.precipitation_amount;
+          const w=ts.data?.instant?.details?.wind_speed;
+          return `<div class="frow">
+            <div class="ftime">${new Date(ts.time).toLocaleTimeString("no-NO",{hour:"2-digit",minute:"2-digit"})}</div>
+            <div class="ficon">${wi(s)}</div>
+            <div class="fdetail">${p>0?`💧${p}mm  `:""}${w!=null?`💨${Math.round(w)}m/s`:""}</div>
+            <div class="ftemp">${Math.round(t)}°</div>
+          </div>`;
+        }).join("")}
+      </div>`;
+  } else if(curTab==="stopp"){
+    if(!stops.length){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter holdeplasser…</div></div>`);return;}
+    c.innerHTML=`<div class="slabel">Holdeplasser i nærheten</div>`+stops.map(s=>`
+      <div class="stopcard">
+        <div class="stopcard-name"><div class="stop-dot">📍</div>${s.name}</div>
+        ${(s.estimatedCalls||[]).slice(0,5).map(call=>`
+          <div class="minidep">
+            <span class="minibadge">${mi(call.serviceJourney?.line?.transportMode)}${call.serviceJourney?.line?.publicCode}</span>
+            <span class="minidest">${call.destinationDisplay?.frontText||"–"}</span>
+            <span class="minitime">${minsUntil(call.expectedDepartureTime)}</span>
+          </div>`).join("")}
+      </div>`).join("");
+  }
+}
+
+// Auto-refresh departures every 30s
+setInterval(()=>{if(loc&&(curTab==="avg"||curTab==="stopp"))fetchTransit();},30000);
+
+initLoc();
+</script>
+</body>
+</html>
