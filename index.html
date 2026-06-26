@@ -275,22 +275,45 @@ async function fetchTransit(){
 async function fetchRestaurants(){
   if(!loc)return;
   try{
-    const url=`https://api.foursquare.com/v3/places/search?query=restaurant&ll=${loc.lat},${loc.lon}&radius=800&limit=15&fields=name,distance,categories,location`;
-    const r=await fetchWithTimeout(url,{headers:{"Authorization":"P221ZJ3XBA434JYW2VVN0HH1WWPND0RZA2E12DTAETSRKECX","Accept":"application/json"}},6000);
+    // Use Wikidata/OSM via Overpass but with a strict timeout and small radius
+    const q=`[out:json][timeout:8];(node["amenity"~"restaurant|cafe|fast_food|bar|pub"]["name"](around:600,${loc.lat},${loc.lon}););out body 20;`;
+    const r=await fetchWithTimeout("https://overpass-api.de/api/interpreter",{method:"POST",body:"data="+encodeURIComponent(q)},9000);
     const data=await r.json();
-    restaurants=(data.results||[]).map(p=>({
-      name:p.name,
-      type:p.categories?.[0]?.name||"",
-      dist:p.distance||0,
-      address:p.location?.formatted_address||"",
-      lat:p.geocodes?.main?.latitude,
-      lon:p.geocodes?.main?.longitude,
-      opening_hours:"",
-    }));
+    restaurants=(data.elements||[])
+      .filter(e=>e.tags?.name)
+      .map(e=>({
+        name:e.tags.name,
+        type:formatType(e.tags.cuisine||e.tags.amenity||""),
+        dist:Math.round(calcDist(loc.lat,loc.lon,e.lat,e.lon)),
+        opening_hours:e.tags.opening_hours||"",
+        lat:e.lat, lon:e.lon,
+      }))
+      .sort((a,b)=>a.dist-b.dist)
+      .slice(0,15);
+    if(!restaurants.length) throw new Error("empty");
     if(curTab==="mat")renderContent();
   }catch(e){
-    console.error("Restaurant error",e);
-    if(curTab==="mat")setContent(`<div class="errcard"><div class="etitle">Kunne ikke hente restauranter</div><div class="ebody">Prøv igjen om litt.</div></div>`);
+    // Fallback: try a different Overpass endpoint
+    try{
+      const q2=`[out:json][timeout:8];(node["amenity"~"restaurant|cafe|fast_food"]["name"](around:600,${loc.lat},${loc.lon}););out body 20;`;
+      const r2=await fetchWithTimeout("https://overpass.kumi.systems/api/interpreter",{method:"POST",body:"data="+encodeURIComponent(q2)},9000);
+      const data2=await r2.json();
+      restaurants=(data2.elements||[])
+        .filter(e=>e.tags?.name)
+        .map(e=>({
+          name:e.tags.name,
+          type:formatType(e.tags.cuisine||e.tags.amenity||""),
+          dist:Math.round(calcDist(loc.lat,loc.lon,e.lat,e.lon)),
+          opening_hours:e.tags.opening_hours||"",
+          lat:e.lat, lon:e.lon,
+        }))
+        .sort((a,b)=>a.dist-b.dist)
+        .slice(0,15);
+      if(curTab==="mat")renderContent();
+    }catch(e2){
+      console.error("Restaurant error",e2);
+      if(curTab==="mat")setContent(`<div class="errcard"><div class="etitle">Kunne ikke hente restauranter</div><div class="ebody">Prøv igjen om litt.</div></div>`);
+    }
   }
 }
 function formatType(t){
