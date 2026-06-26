@@ -275,27 +275,23 @@ async function fetchTransit(){
 async function fetchRestaurants(){
   if(!loc)return;
   try{
-    const pad=0.008;
-    const url=`https://nominatim.openstreetmap.org/search?format=json&limit=30&bounded=1`+
-      `&viewbox=${loc.lon-pad},${loc.lat+pad},${loc.lon+pad},${loc.lat-pad}`+
-      `&featuretype=amenity&q=restaurant|cafe|fast_food|bar`;
-    const r=await fetchWithTimeout(url,{headers:{"User-Agent":"Oversikten/1.0 github.com/Patronskive/oversikten"}},8000);
-    const raw=await r.json();
-    restaurants=raw
-      .filter(p=>p.display_name)
-      .map(p=>({
-        name:p.display_name.split(",")[0],
-        type:formatType(p.type||p.class||""),
-        dist:Math.round(calcDist(loc.lat,loc.lon,parseFloat(p.lat),parseFloat(p.lon))),
-        lat:parseFloat(p.lat),
-        lon:parseFloat(p.lon),
-        opening_hours:"",
-      }))
-      .filter(p=>p.dist<800)
-      .sort((a,b)=>a.dist-b.dist)
-      .slice(0,15);
+    const url=`https://api.foursquare.com/v3/places/search?ll=${loc.lat},${loc.lon}&radius=800&categories=13000&limit=15&sort=DISTANCE`;
+    const r=await fetchWithTimeout(url,{headers:{"Authorization":"fsq3/ek53+Cnm0m/0ecZO4jW6ZgL0fkvG6ejZTA63TRgtZM=","Accept":"application/json"}},6000);
+    const data=await r.json();
+    restaurants=(data.results||[]).map(p=>({
+      name:p.name,
+      type:p.categories?.[0]?.name||"",
+      dist:p.distance||0,
+      address:p.location?.formatted_address||"",
+      lat:p.geocodes?.main?.latitude,
+      lon:p.geocodes?.main?.longitude,
+      opening_hours:"",
+    }));
     if(curTab==="mat")renderContent();
-  }catch(e){console.error("Restaurant error",e);if(curTab==="mat")setContent(`<div class="errcard"><div class="etitle">Kunne ikke hente restauranter</div><div class="ebody">Prøv igjen om litt.</div></div>`);}
+  }catch(e){
+    console.error("Restaurant error",e);
+    if(curTab==="mat")setContent(`<div class="errcard"><div class="etitle">Kunne ikke hente restauranter</div><div class="ebody">Prøv igjen om litt.</div></div>`);
+  }
 }
 function formatType(t){
   const map={restaurant:"Restaurant",cafe:"Kafé",fast_food:"Hurtigmat",bar:"Bar",pizza:"Pizza",burger:"Burger",sushi:"Sushi",asian:"Asiatisk",italian:"Italiensk",norwegian:"Norsk",chinese:"Kinesisk",indian:"Indisk",mexican:"Meksikansk",kebab:"Kebab",bakery:"Bakeri"};
