@@ -375,7 +375,7 @@ async function fetchAttractions(){
     },8000);
     const data=await r.json();
     if(data.error)throw new Error(data.error.message);
-    attractions=(data.places||[]).map(p=>({
+    attractions=(data.places||[]).filter(p=>p.rating&&p.rating>=3.5).map(p=>({
       name:p.displayName?.text||"",
       type:p.primaryTypeDisplayName?.text||"",
       rating:p.rating||null,
