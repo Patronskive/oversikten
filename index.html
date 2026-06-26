@@ -275,45 +275,45 @@ async function fetchTransit(){
 async function fetchRestaurants(){
   if(!loc)return;
   try{
-    // Use Wikidata/OSM via Overpass but with a strict timeout and small radius
-    const q=`[out:json][timeout:8];(node["amenity"~"restaurant|cafe|fast_food|bar|pub"]["name"](around:600,${loc.lat},${loc.lon}););out body 20;`;
-    const r=await fetchWithTimeout("https://overpass-api.de/api/interpreter",{method:"POST",body:"data="+encodeURIComponent(q)},9000);
+    const url=`https://places.googleapis.com/v1/places:searchNearby`;
+    const body={
+      includedTypes:["restaurant","cafe","bar","bakery","meal_takeaway"],
+      maxResultCount:15,
+      rankPreference:"DISTANCE",
+      locationRestriction:{
+        circle:{
+          center:{latitude:loc.lat,longitude:loc.lon},
+          radius:800
+        }
+      },
+      fields:"places.displayName,places.rating,places.userRatingCount,places.priceLevel,places.currentOpeningHours,places.formattedAddress,places.location,places.primaryTypeDisplayName"
+    };
+    const r=await fetchWithTimeout(url,{
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json",
+        "X-Goog-Api-Key":"AIzaSyAg9DDMoznsaUQAHKZ7toQ6HR7XhhEunmI",
+        "X-Goog-FieldMask":"places.displayName,places.rating,places.userRatingCount,places.priceLevel,places.currentOpeningHours,places.formattedAddress,places.location,places.primaryTypeDisplayName"
+      },
+      body:JSON.stringify(body)
+    },8000);
     const data=await r.json();
-    restaurants=(data.elements||[])
-      .filter(e=>e.tags?.name)
-      .map(e=>({
-        name:e.tags.name,
-        type:formatType(e.tags.cuisine||e.tags.amenity||""),
-        dist:Math.round(calcDist(loc.lat,loc.lon,e.lat,e.lon)),
-        opening_hours:e.tags.opening_hours||"",
-        lat:e.lat, lon:e.lon,
-      }))
-      .sort((a,b)=>a.dist-b.dist)
-      .slice(0,15);
-    if(!restaurants.length) throw new Error("empty");
+    restaurants=(data.places||[]).map(p=>({
+      name:p.displayName?.text||"",
+      type:p.primaryTypeDisplayName?.text||"",
+      rating:p.rating||null,
+      ratingCount:p.userRatingCount||null,
+      price:p.priceLevel||null,
+      open:p.currentOpeningHours?.openNow??null,
+      address:p.formattedAddress||"",
+      dist:Math.round(calcDist(loc.lat,loc.lon,p.location?.latitude,p.location?.longitude)),
+      lat:p.location?.latitude,
+      lon:p.location?.longitude,
+    }));
     if(curTab==="mat")renderContent();
   }catch(e){
-    // Fallback: try a different Overpass endpoint
-    try{
-      const q2=`[out:json][timeout:8];(node["amenity"~"restaurant|cafe|fast_food"]["name"](around:600,${loc.lat},${loc.lon}););out body 20;`;
-      const r2=await fetchWithTimeout("https://overpass.kumi.systems/api/interpreter",{method:"POST",body:"data="+encodeURIComponent(q2)},9000);
-      const data2=await r2.json();
-      restaurants=(data2.elements||[])
-        .filter(e=>e.tags?.name)
-        .map(e=>({
-          name:e.tags.name,
-          type:formatType(e.tags.cuisine||e.tags.amenity||""),
-          dist:Math.round(calcDist(loc.lat,loc.lon,e.lat,e.lon)),
-          opening_hours:e.tags.opening_hours||"",
-          lat:e.lat, lon:e.lon,
-        }))
-        .sort((a,b)=>a.dist-b.dist)
-        .slice(0,15);
-      if(curTab==="mat")renderContent();
-    }catch(e2){
-      console.error("Restaurant error",e2);
-      if(curTab==="mat")setContent(`<div class="errcard"><div class="etitle">Kunne ikke hente restauranter</div><div class="ebody">Prøv igjen om litt.</div></div>`);
-    }
+    console.error("Restaurant error",e);
+    if(curTab==="mat")setContent(`<div class="errcard"><div class="etitle">Kunne ikke hente restauranter</div><div class="ebody">Prøv igjen om litt.</div></div>`);
   }
 }
 function formatType(t){
@@ -423,16 +423,20 @@ function renderContent(){
   } else if(curTab==="mat"){
     if(!loc){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter posisjon…</div></div>`);return;}
     if(!restaurants.length){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter restauranter…</div></div>`);return;}
+    const priceMap={PRICE_LEVEL_FREE:"",PRICE_LEVEL_INEXPENSIVE:"kr",PRICE_LEVEL_MODERATE:"kr kr",PRICE_LEVEL_EXPENSIVE:"kr kr kr",PRICE_LEVEL_VERY_EXPENSIVE:"kr kr kr kr"};
     c.innerHTML=`<div class="slabel">Nærmeste steder å spise</div>`+restaurants.map(r=>{
-      const oh=parseOH(r.opening_hours);
+      const stars=r.rating?`<span style="color:#fbbf24">★</span> <strong>${r.rating.toFixed(1)}</strong> <span style="color:var(--muted);font-size:11px">(${r.ratingCount?.toLocaleString("no-NO")||0})</span>`:"";
+      const price=r.price&&priceMap[r.price]?`<span style="color:var(--muted);margin-left:8px">${priceMap[r.price]}</span>`:"";
+      const openBadge=r.open===true?`<span class="open">Åpent nå</span>`:r.open===false?`<span class="closed">Stengt</span>`:"";
       return `<div class="rcard">
         <div class="rcard-body">
           <div class="rcard-top">
-            <a class="rcard-name" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.name)}" target="_blank" style="color:var(--text);text-decoration:none">${r.name} <i class="ti ti-external-link" style="font-size:13px;color:var(--muted);vertical-align:middle"></i></a>
+            <a class="rcard-name" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.name+' '+r.address)}" target="_blank" style="color:var(--text);text-decoration:none">${r.name} <i class="ti ti-external-link" style="font-size:13px;color:var(--muted);vertical-align:middle"></i></a>
             <div style="font-size:11px;color:var(--muted);flex-shrink:0">📍 ${r.dist}m</div>
           </div>
-          ${r.type?`<div class="rcard-type">${r.type}</div>`:''}
-          ${oh?`<div class="rcard-hours">${oh.open?'<span class="open">Åpent nå</span>':'<span class="closed">Stengt</span>'}<span style="color:var(--muted)"> · ${oh.hours}</span></div>`:''}
+          ${r.type?`<div class="rcard-type">${r.type}${price}</div>`:""}
+          ${stars?`<div style="font-size:13px;margin:5px 0">${stars}</div>`:""}
+          ${openBadge?`<div class="rcard-hours">${openBadge}</div>`:""}
         </div>
       </div>`;
     }).join("");
