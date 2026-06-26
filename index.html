@@ -242,13 +242,16 @@ async function fetchWeather(){
 
 async function fetchTransit(){
   if(!loc)return;
-  const q=`{stopPlacesByBbox(minimumLatitude:${loc.lat-0.012},maximumLatitude:${loc.lat+0.012},minimumLongitude:${loc.lon-0.018},maximumLongitude:${loc.lon+0.018}){id name estimatedCalls(timeRange:3600,numberOfDepartures:12){expectedDepartureTime destinationDisplay{frontText}serviceJourney{line{publicCode transportMode}}realtime}}}`;
+  const q=`{stopPlacesByRadius(latitude:${loc.lat},longitude:${loc.lon},radius:600,size:10){edges{node{distance place{id name latitude longitude estimatedCalls(timeRange:3600,numberOfDepartures:10){expectedDepartureTime destinationDisplay{frontText}serviceJourney{line{publicCode transportMode}}realtime}}}}}}`;
   try{
     const r=await fetch("https://api.entur.io/journey-planner/v3/graphql",{method:"POST",headers:{"Content-Type":"application/json","ET-Client-Name":"oversikten-app"},body:JSON.stringify({query:q})});
     const d=await r.json();
-    const raw=(d.data?.stopPlacesByBbox||[]).filter(s=>s.estimatedCalls?.length);
+    const edges=(d.data?.stopPlacesByRadius?.edges||[]);
+    const raw=edges
+      .filter(e=>e.node?.place?.estimatedCalls?.length)
+      .map(e=>({...e.node.place,dist:e.node.distance}));
     const all=[];
-    raw.forEach(s=>s.estimatedCalls.forEach(c=>all.push({stop:s.name,time:c.expectedDepartureTime,dest:c.destinationDisplay?.frontText,line:c.serviceJourney?.line?.publicCode,mode:c.serviceJourney?.line?.transportMode})));
+    raw.forEach(s=>s.estimatedCalls.forEach(c=>all.push({stop:s.name,dist:s.dist,time:c.expectedDepartureTime,dest:c.destinationDisplay?.frontText,line:c.serviceJourney?.line?.publicCode,mode:c.serviceJourney?.line?.transportMode})));
     all.sort((a,b)=>new Date(a.time)-new Date(b.time));
     departures=all.slice(0,30);
     stops=raw.slice(0,6);
@@ -376,7 +379,7 @@ function renderContent(){
       const soon=m==="nå"||(typeof m==="string"&&parseInt(m)<=3);
       return `<div class="dep${soon?" soon":""}">
         <div class="lbadge">${mi(dep.mode)}${dep.line}</div>
-        <div style="flex:1;min-width:0"><div class="dep-dest">${dep.dest||"–"}</div><div class="dep-stop">${dep.stop}</div></div>
+        <div style="flex:1;min-width:0"><div class="dep-dest">${dep.dest||"–"}</div><div class="dep-stop">${dep.stop}${dep.dist?` · ${dep.dist}m`:""}</div></div>
         <div class="dep-right"><div class="dep-mins">${m}</div><div class="dep-clock">${fmt(dep.time)}</div></div>
       </div>`;
     }).join("");
@@ -388,7 +391,7 @@ function renderContent(){
       return `<div class="rcard">
         <div class="rcard-body">
           <div class="rcard-top">
-            <div class="rcard-name">${r.name}</div>
+            <a class="rcard-name" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.name)}" target="_blank" style="color:var(--text);text-decoration:none">${r.name} <i class="ti ti-external-link" style="font-size:13px;color:var(--muted);vertical-align:middle"></i></a>
             <div style="font-size:11px;color:var(--muted);flex-shrink:0">📍 ${r.dist}m</div>
           </div>
           ${r.type?`<div class="rcard-type">${r.type}</div>`:''}
@@ -436,7 +439,7 @@ function renderContent(){
     if(!stops.length){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter holdeplasser…</div></div>`);return;}
     c.innerHTML=`<div class="slabel">Holdeplasser i nærheten</div>`+stops.map(s=>`
       <div class="stopcard">
-        <div class="stopcard-name"><div class="stop-dot">📍</div>${s.name}</div>
+        <div class="stopcard-name"><div class="stop-dot">📍</div><a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.name+' holdeplass')}" target="_blank" style="color:var(--text);text-decoration:none">${s.name} <i class="ti ti-external-link" style="font-size:13px;color:var(--muted);vertical-align:middle"></i></a>${s.dist?`<span style="font-size:11px;font-weight:400;color:var(--muted);margin-left:auto">${s.dist}m</span>`:""}</div>
         ${(s.estimatedCalls||[]).slice(0,5).map(call=>`
           <div class="minidep">
             <span class="minibadge">${mi(call.serviceJourney?.line?.transportMode)}${call.serviceJourney?.line?.publicCode}</span>
