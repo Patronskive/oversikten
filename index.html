@@ -151,7 +151,7 @@
 <div class="tabs">
   <button class="tab active" onclick="setTab('avg')" id="tab-avg"><i class="ti ti-bus ti"></i>Avganger</button>
   <button class="tab" onclick="setTab('mat')" id="tab-mat"><i class="ti ti-tools-kitchen-2 ti"></i>Spise</button>
-  <button class="tab" onclick="setTab('vaer')" id="tab-vaer"><i class="ti ti-cloud ti"></i>Vær</button>
+  <button class="tab" onclick="setTab('utforsk')" id="tab-utforsk"><i class="ti ti-building-museum ti"></i>Utforsk</button>
   <button class="tab" onclick="setTab('stopp')" id="tab-stopp"><i class="ti ti-map-pin ti"></i>Stopp</button>
 </div>
 
@@ -199,7 +199,8 @@ function todayHours(hours){
   return line.replace(today+": ","");
 }
 
-let loc=null, weather=null, departures=[], stops=[], restaurants=[], curTab="avg";
+let loc=null, weather=null, departures=[], stops=[], restaurants=[], attractions=[], curTab="avg";
+let fetchingAttractions=false;
 
 // Geolocation
 function initLoc(){
@@ -320,6 +321,53 @@ async function fetchRestaurants(){
     if(curTab==="mat")setContent(`<div class="errcard"><div class="etitle">Kunne ikke hente restauranter</div><div class="ebody">${e.message||"Prøv igjen om litt."}</div></div>`);
   }
 }
+
+async function fetchAttractions(){
+  if(!loc||fetchingAttractions)return;
+  fetchingAttractions=true;
+  try{
+    const fieldMask="places.displayName,places.rating,places.userRatingCount,places.formattedAddress,places.location,places.primaryTypeDisplayName,places.currentOpeningHours";
+    const body={
+      includedTypes:["museum","art_gallery","tourist_attraction","park","monument","aquarium","zoo","amusement_park","stadium","cultural_landmark","historical_place","national_park","performing_arts_theater","visitor_center"],
+      maxResultCount:15,
+      rankPreference:"DISTANCE",
+      locationRestriction:{
+        circle:{
+          center:{latitude:loc.lat,longitude:loc.lon},
+          radius:2000
+        }
+      }
+    };
+    const r=await fetchWithTimeout("https://places.googleapis.com/v1/places:searchNearby",{
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json",
+        "X-Goog-Api-Key":"AIzaSyAg9DDMoznsaUQAHKZ7toQ6HR7XhhEunmI",
+        "X-Goog-FieldMask":fieldMask
+      },
+      body:JSON.stringify(body)
+    },8000);
+    const data=await r.json();
+    if(data.error)throw new Error(data.error.message);
+    attractions=(data.places||[]).map(p=>({
+      name:p.displayName?.text||"",
+      type:p.primaryTypeDisplayName?.text||"",
+      rating:p.rating||null,
+      ratingCount:p.userRatingCount||null,
+      open:p.currentOpeningHours?.openNow??null,
+      address:p.formattedAddress||"",
+      dist:Math.round(calcDist(loc.lat,loc.lon,p.location?.latitude||0,p.location?.longitude||0)),
+      lat:p.location?.latitude,
+      lon:p.location?.longitude,
+    }));
+    fetchingAttractions=false;
+    if(curTab==="utforsk")renderContent();
+  }catch(e){
+    fetchingAttractions=false;
+    console.error("Attractions error:",e.message||e);
+    if(curTab==="utforsk")setContent(`<div class="errcard"><div class="etitle">Kunne ikke hente steder</div><div class="ebody">${e.message||"Prøv igjen om litt."}</div></div>`);
+  }
+}
 function formatType(t){
   const map={restaurant:"Restaurant",cafe:"Kafé",fast_food:"Hurtigmat",bar:"Bar",pizza:"Pizza",burger:"Burger",sushi:"Sushi",asian:"Asiatisk",italian:"Italiensk",norwegian:"Norsk",chinese:"Kinesisk",indian:"Indisk",mexican:"Meksikansk",kebab:"Kebab",bakery:"Bakeri"};
   return t.split(";").map(s=>map[s.trim()]||s.trim()).filter(Boolean).join(", ");
@@ -365,7 +413,7 @@ function parseOH(str){
 }
 function fetchAll(){
   setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter data…</div></div>`);
-  weather=null;departures=[];stops=[];restaurants=[];
+  weather=null;departures=[];stops=[];restaurants=[];attractions=[];
   fetchWeather();
   fetchTransit();
 }
@@ -407,6 +455,7 @@ function setTab(t){
   document.querySelectorAll(".tab").forEach(el=>el.classList.remove("active"));
   document.getElementById("tab-"+t).classList.add("active");
   if(t==="mat"&&!restaurants.length&&loc&&!fetchingRestaurants)fetchRestaurants();
+  else if(t==="utforsk"&&!attractions.length&&loc&&!fetchingAttractions)fetchAttractions();
   else renderContent();
 }
 
@@ -444,42 +493,24 @@ function renderContent(){
         </div>
       </div>`;
     }).join("");
-  } else if(curTab==="vaer"){
-    if(!weather){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter vær…</div></div>`);return;}
-    const cur=weather.current?.data;
-    const temp=cur?.instant?.details?.air_temperature;
-    const sym=cur?.next_1_hours?.summary?.symbol_code||cur?.next_6_hours?.summary?.symbol_code;
-    const wind=cur?.instant?.details?.wind_speed;
-    const rain=cur?.next_1_hours?.details?.precipitation_amount;
-    const hum=cur?.instant?.details?.relative_humidity;
-    c.innerHTML=`
-      <div class="wcard">
-        <div class="wcard-label">Nå</div>
-        <div class="whero">
-          <div style="font-size:54px;line-height:1">${wi(sym)}</div>
-          <div><div class="wbig">${Math.round(temp)}°</div><div style="font-size:13px;color:var(--muted);margin-top:4px">Celsius</div></div>
+  } else if(curTab==="utforsk"){
+    if(!loc){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter posisjon…</div></div>`);return;}
+    if(!attractions.length){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter steder…</div></div>`);return;}
+    c.innerHTML=`<div class="slabel">I nærheten (2 km)</div>`+attractions.map(r=>{
+      const stars=r.rating?`<span style="color:#fbbf24">★</span> <strong>${r.rating.toFixed(1)}</strong> <span style="color:var(--muted);font-size:11px">(${r.ratingCount?.toLocaleString("no-NO")||0})</span>`:"";
+      const openBadge=r.open===true?`<span class="open">Åpent nå</span>`:r.open===false?`<span class="closed">Stengt</span>`:"";
+      return `<div class="rcard">
+        <div class="rcard-body">
+          <div class="rcard-top">
+            <a class="rcard-name" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.name+' '+r.address)}" target="_blank" style="color:var(--text);text-decoration:none">${r.name} <i class="ti ti-external-link" style="font-size:13px;color:var(--muted);vertical-align:middle"></i></a>
+            <div style="font-size:11px;color:var(--muted);flex-shrink:0">📍 ${r.dist}m</div>
+          </div>
+          ${r.type?`<div class="rcard-type">${r.type}</div>`:""}
+          ${stars?`<div style="font-size:13px;margin:5px 0">${stars}</div>`:""}
+          ${openBadge?`<div class="rcard-hours">${openBadge}</div>`:""}
         </div>
-        <div class="wstats">
-          <div class="wstat"><div class="wstat-icon">💨</div><div class="wstat-val">${wind!=null?Math.round(wind)+" m/s":"–"}</div><div class="wstat-label">Vind</div></div>
-          <div class="wstat"><div class="wstat-icon">🌧️</div><div class="wstat-val">${rain!=null?rain+" mm":"0 mm"}</div><div class="wstat-label">Nedbør</div></div>
-          <div class="wstat"><div class="wstat-icon">💧</div><div class="wstat-val">${hum!=null?Math.round(hum)+"%":"–"}</div><div class="wstat-label">Fuktighet</div></div>
-        </div>
-      </div>
-      <div class="wcard">
-        <div class="wcard-label">Neste 12 timer</div>
-        ${weather.hours.slice(1).map(ts=>{
-          const t=ts.data?.instant?.details?.air_temperature;
-          const s=ts.data?.next_1_hours?.summary?.symbol_code;
-          const p=ts.data?.next_1_hours?.details?.precipitation_amount;
-          const w=ts.data?.instant?.details?.wind_speed;
-          return `<div class="frow">
-            <div class="ftime">${new Date(ts.time).toLocaleTimeString("no-NO",{hour:"2-digit",minute:"2-digit"})}</div>
-            <div class="ficon">${wi(s)}</div>
-            <div class="fdetail">${p>0?`💧${p}mm  `:""}${w!=null?`💨${Math.round(w)}m/s`:""}</div>
-            <div class="ftemp">${Math.round(t)}°</div>
-          </div>`;
-        }).join("")}
       </div>`;
+    }).join("");
   } else if(curTab==="stopp"){
     if(!stops.length){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter holdeplasser…</div></div>`);return;}
     c.innerHTML=`<div class="slabel">Holdeplasser i nærheten</div>`+stops.map(s=>`
