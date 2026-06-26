@@ -275,7 +275,7 @@ async function fetchTransit(){
 async function fetchRestaurants(){
   if(!loc)return;
   try{
-    const url=`https://api.foursquare.com/v3/places/nearby?ll=${loc.lat},${loc.lon}&query=restaurant&limit=15`;
+    const url=`https://api.foursquare.com/v3/places/search?query=restaurant&ll=${loc.lat},${loc.lon}&radius=800&limit=15&fields=name,distance,categories,location`;
     const r=await fetchWithTimeout(url,{headers:{"Authorization":"fsq3/ek53+Cnm0m/0ecZO4jW6ZgL0fkvG6ejZTA63TRgtZM=","Accept":"application/json"}},6000);
     const data=await r.json();
     restaurants=(data.results||[]).map(p=>({
