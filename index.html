@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Oversikten</title>
+<title>Johans guide</title>
 <meta name="theme-color" content="#0d0f1a">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -136,7 +136,7 @@
 <div class="header">
   <div class="header-top">
     <div class="header-left">
-      <div class="eyebrow">Oversikten</div>
+      <div class="eyebrow">Johans guide</div>
       <div class="place" id="place-name">Henter posisjon…<span id="place-sub"></span></div>
     </div>
     <div class="weather-badge" id="weather-badge">
@@ -151,7 +151,7 @@
 <div class="tabs">
   <button class="tab active" onclick="setTab('avg')" id="tab-avg"><i class="ti ti-bus ti"></i>Avganger</button>
   <button class="tab" onclick="setTab('mat')" id="tab-mat"><i class="ti ti-tools-kitchen-2 ti"></i>Spise</button>
-  <button class="tab" onclick="setTab('utforsk')" id="tab-utforsk"><i class="ti ti-building-museum ti"></i>Utforsk</button>
+  <button class="tab" onclick="setTab('utforsk')" id="tab-utforsk"><i class="ti ti-compass ti"></i>Utforsk</button>
   <button class="tab" onclick="setTab('stopp')" id="tab-stopp"><i class="ti ti-map-pin ti"></i>Stopp</button>
 </div>
 
@@ -213,7 +213,7 @@ function initLoc(){
       document.getElementById("place-name").childNodes[0].textContent="Din lokasjon";
       document.getElementById("loc-label").innerHTML=`<i class="ti ti-map-pin" style="font-size:13px"></i> ${loc.lat.toFixed(4)}, ${loc.lon.toFixed(4)}`;
       // Reverse geocode in background, non-blocking
-      fetchWithTimeout(`https://nominatim.openstreetmap.org/reverse?lat=${loc.lat}&lon=${loc.lon}&format=json`,{headers:{"User-Agent":"Oversikten/1.0"}},5000)
+      fetchWithTimeout(`https://nominatim.openstreetmap.org/reverse?lat=${loc.lat}&lon=${loc.lon}&format=json`,{headers:{"User-Agent":"Johans guide/1.0"}},5000)
         .then(r=>r.json()).then(d=>{
           const nb=d.address?.neighbourhood||d.address?.suburb||d.address?.city_district||"";
           const city=d.address?.city||d.address?.town||"";
@@ -236,7 +236,7 @@ function showLocError(msg){
 async function fetchWeather(){
   if(!loc)return;
   try{
-    const r=await fetchWithTimeout(`https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${loc.lat.toFixed(4)}&lon=${loc.lon.toFixed(4)}`,{headers:{"User-Agent":"Oversikten/1.0 github.com/Patronskive/oversikten"}},8000);
+    const r=await fetchWithTimeout(`https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${loc.lat.toFixed(4)}&lon=${loc.lon.toFixed(4)}`,{headers:{"User-Agent":"Johans guide/1.0 github.com/Patronskive/Johans guide"}},8000);
     const d=await r.json();
     weather={current:d.properties?.timeseries?.[0],hours:d.properties?.timeseries?.slice(0,13)||[]};
     renderHeader();
@@ -250,7 +250,7 @@ async function fetchTransit(){
   const minLat=loc.lat-pad, maxLat=loc.lat+pad, minLon=loc.lon-pad, maxLon=loc.lon+pad;
   const q=`{stopPlacesByBbox(minimumLatitude:${minLat},maximumLatitude:${maxLat},minimumLongitude:${minLon},maximumLongitude:${maxLon}){id name latitude longitude estimatedCalls(timeRange:3600,numberOfDepartures:10){expectedDepartureTime destinationDisplay{frontText}serviceJourney{line{publicCode transportMode}}realtime}}}`;
   try{
-    const r=await fetchWithTimeout("https://api.entur.io/journey-planner/v3/graphql",{method:"POST",headers:{"Content-Type":"application/json","ET-Client-Name":"oversikten-app"},body:JSON.stringify({query:q})},8000);
+    const r=await fetchWithTimeout("https://api.entur.io/journey-planner/v3/graphql",{method:"POST",headers:{"Content-Type":"application/json","ET-Client-Name":"Johans guide-app"},body:JSON.stringify({query:q})},8000);
     const data=await r.json();
     const raw=(data.data?.stopPlacesByBbox||[])
       .filter(s=>s.estimatedCalls?.length&&s.latitude)
