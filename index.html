@@ -263,8 +263,8 @@ async function fetchTransit(){
       mode:c.serviceJourney?.line?.transportMode
     })));
     all.sort((a,b)=>new Date(a.time)-new Date(b.time));
-    departures=all.slice(0,30);
-    stops=raw.slice(0,6);
+    departures=all.filter(d=>!d.dist||d.dist<=300).slice(0,30);
+    stops=raw.filter(s=>!s.dist||s.dist<=300).slice(0,6);
     if(curTab==="avg"||curTab==="stopp")renderContent();
   }catch(e){
     console.error("Transit error",e);
