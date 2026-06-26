@@ -268,22 +268,27 @@ async function fetchTransit(){
 async function fetchRestaurants(){
   if(!loc)return;
   try{
-    const q=`[out:json][timeout:15];(node["amenity"="restaurant"](around:800,${loc.lat},${loc.lon});node["amenity"="cafe"](around:800,${loc.lat},${loc.lon});node["amenity"="fast_food"](around:800,${loc.lat},${loc.lon});node["amenity"="bar"]["food"="yes"](around:800,${loc.lat},${loc.lon}););out body;`;
-    const r=await fetchWithTimeout("https://overpass-api.de/api/interpreter",{method:"POST",body:"data="+encodeURIComponent(q)},10000);
-    const d=await r.json();
-    restaurants=d.elements
-      .filter(e=>e.tags?.name)
-      .map(e=>({
-        name:e.tags.name,
-        type:formatType(e.tags.cuisine||e.tags.amenity||""),
-        dist:Math.round(calcDist(loc.lat,loc.lon,e.lat,e.lon)),
-        opening_hours:e.tags.opening_hours||"",
-        website:e.tags.website||e.tags["contact:website"]||"",
+    const pad=0.008;
+    const url=`https://nominatim.openstreetmap.org/search?format=json&limit=30&bounded=1`+
+      `&viewbox=${loc.lon-pad},${loc.lat+pad},${loc.lon+pad},${loc.lat-pad}`+
+      `&featuretype=amenity&q=restaurant|cafe|fast_food|bar`;
+    const r=await fetchWithTimeout(url,{headers:{"User-Agent":"Oversikten/1.0 github.com/Patronskive/oversikten"}},8000);
+    const raw=await r.json();
+    restaurants=raw
+      .filter(p=>p.display_name)
+      .map(p=>({
+        name:p.display_name.split(",")[0],
+        type:formatType(p.type||p.class||""),
+        dist:Math.round(calcDist(loc.lat,loc.lon,parseFloat(p.lat),parseFloat(p.lon))),
+        lat:parseFloat(p.lat),
+        lon:parseFloat(p.lon),
+        opening_hours:"",
       }))
+      .filter(p=>p.dist<800)
       .sort((a,b)=>a.dist-b.dist)
       .slice(0,15);
     if(curTab==="mat")renderContent();
-  }catch(e){console.error("Restaurant error",e);}
+  }catch(e){console.error("Restaurant error",e);if(curTab==="mat")setContent(`<div class="errcard"><div class="etitle">Kunne ikke hente restauranter</div><div class="ebody">Prøv igjen om litt.</div></div>`);}
 }
 function formatType(t){
   const map={restaurant:"Restaurant",cafe:"Kafé",fast_food:"Hurtigmat",bar:"Bar",pizza:"Pizza",burger:"Burger",sushi:"Sushi",asian:"Asiatisk",italian:"Italiensk",norwegian:"Norsk",chinese:"Kinesisk",indian:"Indisk",mexican:"Meksikansk",kebab:"Kebab",bakery:"Bakeri"};
