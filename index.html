@@ -272,10 +272,12 @@ async function fetchTransit(){
   }
 }
 
+let fetchingRestaurants=false;
 async function fetchRestaurants(){
-  if(!loc)return;
+  if(!loc||fetchingRestaurants)return;
+  fetchingRestaurants=true;
   try{
-    const url=`https://places.googleapis.com/v1/places:searchNearby`;
+    const fieldMask="places.displayName,places.rating,places.userRatingCount,places.priceLevel,places.currentOpeningHours,places.formattedAddress,places.location,places.primaryTypeDisplayName";
     const body={
       includedTypes:["restaurant","cafe","bar","bakery","meal_takeaway"],
       maxResultCount:15,
@@ -285,19 +287,19 @@ async function fetchRestaurants(){
           center:{latitude:loc.lat,longitude:loc.lon},
           radius:800
         }
-      },
-      fields:"places.displayName,places.rating,places.userRatingCount,places.priceLevel,places.currentOpeningHours,places.formattedAddress,places.location,places.primaryTypeDisplayName"
+      }
     };
-    const r=await fetchWithTimeout(url,{
+    const r=await fetchWithTimeout("https://places.googleapis.com/v1/places:searchNearby",{
       method:"POST",
       headers:{
         "Content-Type":"application/json",
         "X-Goog-Api-Key":"AIzaSyAg9DDMoznsaUQAHKZ7toQ6HR7XhhEunmI",
-        "X-Goog-FieldMask":"places.displayName,places.rating,places.userRatingCount,places.priceLevel,places.currentOpeningHours,places.formattedAddress,places.location,places.primaryTypeDisplayName"
+        "X-Goog-FieldMask":fieldMask
       },
       body:JSON.stringify(body)
     },8000);
     const data=await r.json();
+    if(data.error){throw new Error(data.error.message);}
     restaurants=(data.places||[]).map(p=>({
       name:p.displayName?.text||"",
       type:p.primaryTypeDisplayName?.text||"",
@@ -306,14 +308,16 @@ async function fetchRestaurants(){
       price:p.priceLevel||null,
       open:p.currentOpeningHours?.openNow??null,
       address:p.formattedAddress||"",
-      dist:Math.round(calcDist(loc.lat,loc.lon,p.location?.latitude,p.location?.longitude)),
+      dist:Math.round(calcDist(loc.lat,loc.lon,p.location?.latitude||0,p.location?.longitude||0)),
       lat:p.location?.latitude,
       lon:p.location?.longitude,
     }));
+    fetchingRestaurants=false;
     if(curTab==="mat")renderContent();
   }catch(e){
-    console.error("Restaurant error",e);
-    if(curTab==="mat")setContent(`<div class="errcard"><div class="etitle">Kunne ikke hente restauranter</div><div class="ebody">Prøv igjen om litt.</div></div>`);
+    fetchingRestaurants=false;
+    console.error("Restaurant error:",e.message||e);
+    if(curTab==="mat")setContent(`<div class="errcard"><div class="etitle">Kunne ikke hente restauranter</div><div class="ebody">${e.message||"Prøv igjen om litt."}</div></div>`);
   }
 }
 function formatType(t){
@@ -402,7 +406,7 @@ function setTab(t){
   curTab=t;
   document.querySelectorAll(".tab").forEach(el=>el.classList.remove("active"));
   document.getElementById("tab-"+t).classList.add("active");
-  if(t==="mat"&&!restaurants.length&&loc)fetchRestaurants();
+  if(t==="mat"&&!restaurants.length&&loc&&!fetchingRestaurants)fetchRestaurants();
   else renderContent();
 }
 
