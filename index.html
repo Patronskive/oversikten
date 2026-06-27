@@ -145,6 +145,7 @@
       <div class="wb-wind" id="wb-wind"></div>
     </div>
   </div>
+  <div style="display:flex;gap:8px;padding-bottom:10px;flex-wrap:wrap" id="indicator-bar"></div>
   <div class="hour-strip" id="hour-strip"></div>
 </div>
 
@@ -481,19 +482,20 @@ function renderHeader(){
     document.getElementById("wb-wind").textContent=wind!=null?"💨 "+Math.round(wind)+" m/s":"";
   }
   // UV + pollen indicators
-  const uvEl=document.getElementById("uv-bar");
-  const pollenEl=document.getElementById("pollen-bar");
-  if(uvEl&&weather.uv!=null){
-    const uvColor=weather.uv<=2?"#34d399":weather.uv<=5?"#fbbf24":weather.uv<=7?"#f97316":"#f87171";
-    const uvLabel=weather.uv<=2?"Lav":weather.uv<=5?"Moderat":weather.uv<=7?"Høy":"Svært høy";
-    uvEl.style.display="flex";
-    uvEl.innerHTML=`<span style="color:var(--muted);font-size:11px">☀️ UV</span><span style="font-size:11px;font-weight:700;color:${uvColor};margin-left:6px">${weather.uv} – ${uvLabel}</span>`;
-  }
-  if(pollenEl&&weather.pollen!=null){
-    const pColor=weather.pollen<=1?"#34d399":weather.pollen<=3?"#fbbf24":weather.pollen<=5?"#f97316":"#f87171";
-    const pLabel=weather.pollen<=1?"Lav":weather.pollen<=3?"Moderat":weather.pollen<=5?"Høy":"Svært høy";
-    pollenEl.style.display="flex";
-    pollenEl.innerHTML=`<span style="color:var(--muted);font-size:11px">🌿 Pollen</span><span style="font-size:11px;font-weight:700;color:${pColor};margin-left:6px">${pLabel}</span>`;
+  const indBar=document.getElementById("indicator-bar");
+  if(indBar){
+    let indHtml="";
+    if(weather.uv!=null){
+      const uvColor=weather.uv<=2?"#34d399":weather.uv<=5?"#fbbf24":weather.uv<=7?"#f97316":"#f87171";
+      const uvLabel=weather.uv<=2?"Lav":weather.uv<=5?"Moderat":weather.uv<=7?"Høy":"Svært høy";
+      indHtml+=`<div style="display:flex;align-items:center;background:var(--surface);border:0.5px solid var(--border);border-radius:8px;padding:5px 10px;gap:6px"><span style="font-size:11px;color:var(--muted)">☀️ UV</span><span style="font-size:11px;font-weight:700;color:${uvColor}">${weather.uv} – ${uvLabel}</span></div>`;
+    }
+    if(weather.pollen!=null){
+      const pColor=weather.pollen<=1?"#34d399":weather.pollen<=3?"#fbbf24":weather.pollen<=5?"#f97316":"#f87171";
+      const pLabel=weather.pollen<=1?"Lav":weather.pollen<=3?"Moderat":weather.pollen<=5?"Høy":"Svært høy";
+      indHtml+=`<div style="display:flex;align-items:center;background:var(--surface);border:0.5px solid var(--border);border-radius:8px;padding:5px 10px;gap:6px"><span style="font-size:11px;color:var(--muted)">🌿 Pollen</span><span style="font-size:11px;font-weight:700;color:${pColor}">${pLabel}</span></div>`;
+    }
+    indBar.innerHTML=indHtml;
   }
   document.getElementById("hour-strip").innerHTML=weather.hours.map((ts,i)=>{
     const t=ts.data?.instant?.details?.air_temperature;
