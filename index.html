@@ -277,7 +277,7 @@ async function fetchWeather(){
 
     // Pollen from Pollenvarsel API
     try{
-      const pollenRes = await fetchWithTimeout(`https://api.met.no/weatherapi/pollen/1.0/?lat=${loc.lat.toFixed(2)}&lon=${loc.lon.toFixed(2)}`,{headers:{"User-Agent":"Johans guide/1.0"}},6000);
+      const pollenRes = await fetchWithTimeout(`https://api.met.no/weatherapi/pollenvarsel/2.0/forecast?lat=${loc.lat.toFixed(2)}&lon=${loc.lon.toFixed(2)}`,{headers:{"User-Agent":"Johans guide/1.0"}},6000);
       const pollenData = await pollenRes.json();
       // Get today's max pollen level
       const today = new Date().toISOString().slice(0,10);
