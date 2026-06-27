@@ -130,6 +130,7 @@
   .slabel { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .12em; margin-bottom: 10px; margin-top: 4px; }
 </style>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗺️</text></svg>">
 </head>
 <body>
 
@@ -275,16 +276,7 @@ async function fetchWeather(){
     const uv = weather.current?.data?.instant?.details?.ultraviolet_index_clear_sky;
     weather.uv = uv!=null ? Math.round(uv) : null;
 
-    // Pollen from Pollenvarsel API
-    try{
-      const pollenRes = await fetchWithTimeout(`https://api.met.no/weatherapi/pollenvarsel/2.0/forecast?lat=${loc.lat.toFixed(2)}&lon=${loc.lon.toFixed(2)}`,{headers:{"User-Agent":"Johans guide/1.0"}},6000);
-      const pollenData = await pollenRes.json();
-      // Get today's max pollen level
-      const today = new Date().toISOString().slice(0,10);
-      const todayEntry = pollenData.properties?.timeseries?.find(t=>t.time?.startsWith(today));
-      const levels = todayEntry?.data ? Object.values(todayEntry.data).map(v=>v?.value||0) : [];
-      weather.pollen = levels.length ? Math.max(...levels) : null;
-    }catch(e){ weather.pollen = null; }
+    weather.pollen = null; // Pollen API not available
 
     renderHeader();
   }catch(e){console.error("Weather error",e);}
