@@ -266,7 +266,7 @@ function showLocError(msg){
 async function fetchWeather(){
   if(!loc)return;
   try{
-    const r=await fetchWithTimeout(`https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${loc.lat.toFixed(4)}&lon=${loc.lon.toFixed(4)}`,{headers:{"User-Agent":"Johans guide/1.0"}},8000);
+    const r=await fetchWithTimeout(`https://api.met.no/weatherapi/locationforecast/2.0/complete?lat=${loc.lat.toFixed(4)}&lon=${loc.lon.toFixed(4)}`,{headers:{"User-Agent":"Johans guide/1.0"}},8000);
     const d=await r.json();
     weather={current:d.properties?.timeseries?.[0],hours:d.properties?.timeseries?.slice(0,13)||[]};
     const uv=weather.current?.data?.instant?.details?.ultraviolet_index_clear_sky;
