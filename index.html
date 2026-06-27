@@ -31,7 +31,7 @@
   .header-left .eyebrow { font-size: 10px; font-weight: 700; letter-spacing: .18em; color: var(--accent); text-transform: uppercase; margin-bottom: 5px; }
   .header-left .place { font-size: 22px; font-weight: 700; letter-spacing: -.03em; line-height: 1.1; }
   .header-left .place span { font-size: 13px; font-weight: 400; color: var(--muted); display: block; margin-top: 3px; }
-  .weather-badge { background: var(--surface); border: 1px solid var(--border2); border-radius: 14px; padding: 10px 14px; text-align: center; flex-shrink: 0; min-width: 68px; display: none; }
+  .weather-badge { background: var(--surface); border: 1px solid var(--border2); border-radius: 14px; padding: 10px 14px; text-align: center; flex-shrink: 0; width: 80px; max-width: 80px; display: none; }
   .weather-badge .wb-icon { font-size: 26px; line-height: 1; }
   .weather-badge .wb-temp { font-size: 19px; font-weight: 700; margin-top: 3px; }
   .weather-badge .wb-wind { font-size: 10px; color: var(--muted); margin-top: 2px; }
@@ -266,19 +266,12 @@ function showLocError(msg){
 async function fetchWeather(){
   if(!loc)return;
   try{
-    const [yrRes, uvRes] = await Promise.all([
-      fetchWithTimeout(`https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${loc.lat.toFixed(4)}&lon=${loc.lon.toFixed(4)}`,{headers:{"User-Agent":"Johans guide/1.0"}},8000),
-      fetchWithTimeout(`https://api.met.no/weatherapi/nowcast/2.0/complete?lat=${loc.lat.toFixed(4)}&lon=${loc.lon.toFixed(4)}`,{headers:{"User-Agent":"Johans guide/1.0"}},8000).catch(()=>null)
-    ]);
-    const yrData = await yrRes.json();
-    weather={current:yrData.properties?.timeseries?.[0],hours:yrData.properties?.timeseries?.slice(0,13)||[]};
-
-    // UV index from locationforecast
-    const uv = weather.current?.data?.instant?.details?.ultraviolet_index_clear_sky;
-    weather.uv = (uv!=null&&uv!==undefined) ? Math.round(uv*10)/10 : null;
-
-    weather.pollen = null; // Pollen API not available
-
+    const r=await fetchWithTimeout(`https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${loc.lat.toFixed(4)}&lon=${loc.lon.toFixed(4)}`,{headers:{"User-Agent":"Johans guide/1.0"}},8000);
+    const d=await r.json();
+    weather={current:d.properties?.timeseries?.[0],hours:d.properties?.timeseries?.slice(0,13)||[]};
+    const uv=weather.current?.data?.instant?.details?.ultraviolet_index_clear_sky;
+    weather.uv=(uv!=null)?uv:null;
+    weather.pollen=null;
     renderHeader();
   }catch(e){console.error("Weather error",e);}
 }
