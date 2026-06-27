@@ -262,11 +262,29 @@ function showLocError(msg){
 async function fetchWeather(){
   if(!loc)return;
   try{
-    const r=await fetchWithTimeout(`https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${loc.lat.toFixed(4)}&lon=${loc.lon.toFixed(4)}`,{headers:{"User-Agent":"Johans guide/1.0 github.com/Patronskive/Johans guide"}},8000);
-    const d=await r.json();
-    weather={current:d.properties?.timeseries?.[0],hours:d.properties?.timeseries?.slice(0,13)||[]};
+    const [yrRes, uvRes] = await Promise.all([
+      fetchWithTimeout(`https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${loc.lat.toFixed(4)}&lon=${loc.lon.toFixed(4)}`,{headers:{"User-Agent":"Johans guide/1.0"}},8000),
+      fetchWithTimeout(`https://api.met.no/weatherapi/nowcast/2.0/complete?lat=${loc.lat.toFixed(4)}&lon=${loc.lon.toFixed(4)}`,{headers:{"User-Agent":"Johans guide/1.0"}},8000).catch(()=>null)
+    ]);
+    const yrData = await yrRes.json();
+    weather={current:yrData.properties?.timeseries?.[0],hours:yrData.properties?.timeseries?.slice(0,13)||[]};
+
+    // UV index from locationforecast
+    const uv = weather.current?.data?.instant?.details?.ultraviolet_index_clear_sky;
+    weather.uv = uv!=null ? Math.round(uv) : null;
+
+    // Pollen from Pollenvarsel API
+    try{
+      const pollenRes = await fetchWithTimeout(`https://api.met.no/weatherapi/pollen/1.0/?lat=${loc.lat.toFixed(2)}&lon=${loc.lon.toFixed(2)}`,{headers:{"User-Agent":"Johans guide/1.0"}},6000);
+      const pollenData = await pollenRes.json();
+      // Get today's max pollen level
+      const today = new Date().toISOString().slice(0,10);
+      const todayEntry = pollenData.properties?.timeseries?.find(t=>t.time?.startsWith(today));
+      const levels = todayEntry?.data ? Object.values(todayEntry.data).map(v=>v?.value||0) : [];
+      weather.pollen = levels.length ? Math.max(...levels) : null;
+    }catch(e){ weather.pollen = null; }
+
     renderHeader();
-    if(curTab==="vaer")renderContent();
   }catch(e){console.error("Weather error",e);}
 }
 
@@ -461,6 +479,21 @@ function renderHeader(){
     document.getElementById("wb-icon").textContent=wi(sym);
     document.getElementById("wb-temp").textContent=Math.round(temp)+"°";
     document.getElementById("wb-wind").textContent=wind!=null?"💨 "+Math.round(wind)+" m/s":"";
+  }
+  // UV + pollen indicators
+  const uvEl=document.getElementById("uv-bar");
+  const pollenEl=document.getElementById("pollen-bar");
+  if(uvEl&&weather.uv!=null){
+    const uvColor=weather.uv<=2?"#34d399":weather.uv<=5?"#fbbf24":weather.uv<=7?"#f97316":"#f87171";
+    const uvLabel=weather.uv<=2?"Lav":weather.uv<=5?"Moderat":weather.uv<=7?"Høy":"Svært høy";
+    uvEl.style.display="flex";
+    uvEl.innerHTML=`<span style="color:var(--muted);font-size:11px">☀️ UV</span><span style="font-size:11px;font-weight:700;color:${uvColor};margin-left:6px">${weather.uv} – ${uvLabel}</span>`;
+  }
+  if(pollenEl&&weather.pollen!=null){
+    const pColor=weather.pollen<=1?"#34d399":weather.pollen<=3?"#fbbf24":weather.pollen<=5?"#f97316":"#f87171";
+    const pLabel=weather.pollen<=1?"Lav":weather.pollen<=3?"Moderat":weather.pollen<=5?"Høy":"Svært høy";
+    pollenEl.style.display="flex";
+    pollenEl.innerHTML=`<span style="color:var(--muted);font-size:11px">🌿 Pollen</span><span style="font-size:11px;font-weight:700;color:${pColor};margin-left:6px">${pLabel}</span>`;
   }
   document.getElementById("hour-strip").innerHTML=weather.hours.map((ts,i)=>{
     const t=ts.data?.instant?.details?.air_temperature;
