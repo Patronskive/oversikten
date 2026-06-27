@@ -274,7 +274,7 @@ async function fetchWeather(){
 
     // UV index from locationforecast
     const uv = weather.current?.data?.instant?.details?.ultraviolet_index_clear_sky;
-    weather.uv = uv!=null ? Math.round(uv) : null;
+    weather.uv = (uv!=null&&uv!==undefined) ? Math.round(uv*10)/10 : null;
 
     weather.pollen = null; // Pollen API not available
 
@@ -482,9 +482,9 @@ function renderHeader(){
   const indBar=document.getElementById("indicator-bar");
   if(indBar){
     let indHtml="";
-    if(weather.uv!=null){
-      const uvColor=weather.uv<=2?"#34d399":weather.uv<=5?"#fbbf24":weather.uv<=7?"#f97316":"#f87171";
-      const uvLabel=weather.uv<=2?"Lav":weather.uv<=5?"Moderat":weather.uv<=7?"Høy":"Svært høy";
+    if(weather.uv!=null&&weather.uv>=0){
+      const uvColor=weather.uv===0?"var(--muted)":weather.uv<=2?"#34d399":weather.uv<=5?"#fbbf24":weather.uv<=7?"#f97316":"#f87171";
+      const uvLabel=weather.uv===0?"Ingen":weather.uv<=2?"Lav":weather.uv<=5?"Moderat":weather.uv<=7?"Høy":"Svært høy";
       indHtml+=`<div style="display:flex;align-items:center;background:var(--surface);border:0.5px solid var(--border);border-radius:8px;padding:5px 10px;gap:6px"><span style="font-size:11px;color:var(--muted)">☀️ UV</span><span style="font-size:11px;font-weight:700;color:${uvColor}">${weather.uv} – ${uvLabel}</span></div>`;
     }
     if(weather.pollen!=null){
