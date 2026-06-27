@@ -471,14 +471,22 @@ function renderHeader(){
     document.getElementById("wb-icon").textContent=wi(sym);
     document.getElementById("wb-temp").textContent=Math.round(temp)+"°";
     document.getElementById("wb-wind").textContent=wind!=null?"💨 "+Math.round(wind)+" m/s":"";
-    const uvVal=weather.uv;
+    const uvRaw=weather.current?.data?.instant?.details?.ultraviolet_index_clear_sky;
+    const uvVal=uvRaw!=null?uvRaw:null;
+    weather.uv=uvVal;
     const wbUv=document.getElementById("wb-uv");
-    if(wbUv&&uvVal!=null){
-      const uvColor=uvVal===0?"#5a6080":uvVal<=2?"#34d399":uvVal<=5?"#fbbf24":uvVal<=7?"#f97316":"#f87171";
-      const uvLabel=uvVal===0?"UV: 0":uvVal<=2?"UV: "+uvVal+" lav":uvVal<=5?"UV: "+uvVal+" mod":uvVal<=7?"UV: "+uvVal+" høy":"UV: "+uvVal+" høy!";
-      wbUv.textContent=uvLabel;
-      wbUv.style.color=uvColor;
-      wbUv.style.display="block";
+    if(wbUv){
+      if(uvVal!=null){
+        const uvColor=uvVal===0?"#5a6080":uvVal<=2?"#34d399":uvVal<=5?"#fbbf24":uvVal<=7?"#f97316":"#f87171";
+        const uvLabel="☀️ UV "+uvVal;
+        wbUv.textContent=uvLabel;
+        wbUv.style.color=uvColor;
+        wbUv.style.display="block";
+      } else {
+        wbUv.textContent="☀️ UV –";
+        wbUv.style.color="#5a6080";
+        wbUv.style.display="block";
+      }
     }
   }
   // UV + pollen indicators
