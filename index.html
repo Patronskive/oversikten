@@ -144,6 +144,7 @@
       <div class="wb-icon" id="wb-icon"></div>
       <div class="wb-temp" id="wb-temp"></div>
       <div class="wb-wind" id="wb-wind"></div>
+      <div id="wb-uv" style="display:none;font-size:10px;margin-top:2px;font-weight:600"></div>
     </div>
   </div>
   <div style="display:flex;gap:8px;padding-bottom:10px;flex-wrap:wrap" id="indicator-bar"></div>
@@ -477,6 +478,15 @@ function renderHeader(){
     document.getElementById("wb-icon").textContent=wi(sym);
     document.getElementById("wb-temp").textContent=Math.round(temp)+"°";
     document.getElementById("wb-wind").textContent=wind!=null?"💨 "+Math.round(wind)+" m/s":"";
+    const uvVal=weather.uv;
+    const wbUv=document.getElementById("wb-uv");
+    if(wbUv&&uvVal!=null){
+      const uvColor=uvVal===0?"#5a6080":uvVal<=2?"#34d399":uvVal<=5?"#fbbf24":uvVal<=7?"#f97316":"#f87171";
+      const uvLabel=uvVal===0?"UV: 0":uvVal<=2?"UV: "+uvVal+" lav":uvVal<=5?"UV: "+uvVal+" mod":uvVal<=7?"UV: "+uvVal+" høy":"UV: "+uvVal+" høy!";
+      wbUv.textContent=uvLabel;
+      wbUv.style.color=uvColor;
+      wbUv.style.display="block";
+    }
   }
   // UV + pollen indicators
   const indBar=document.getElementById("indicator-bar");
