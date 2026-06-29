@@ -237,7 +237,7 @@ async function fetchScooters(){
       if(d<ops[op].closest)ops[op].closest=d;
     });
     scooters=Object.values(ops).sort((a,b)=>a.closest-b.closest);
-    if(curTab==="avg")renderContent();
+    if(curTab==="kollektiv")renderContent();
   }catch(e){console.error("Scooters error",e);}
 }
 function wi(s){if(!s)return"🌤️";const k=Object.keys(WI).find(k=>s.toLowerCase().includes(k));return k?WI[k]:"🌤️";}
@@ -339,10 +339,10 @@ async function fetchTransit(){
     const nearest=filteredStops.length?filteredStops.slice(0,maxStops):raw.slice(0,3);
     departures=all.filter(d=>nearest.some(s=>s.name===d.stop)).slice(0,40);
     stops=nearest;
-    if(curTab==="avg"||curTab==="stopp")renderContent();
+    if(curTab==="kollektiv")renderContent();
   }catch(e){
     console.error("Transit error",e);
-    if(curTab==="avg"||curTab==="stopp")setContent(`<div class="errcard"><div class="etitle">Kunne ikke hente avganger</div><div class="ebody">Prøv igjen om litt.</div></div>`);
+    if(curTab==="kollektiv")setContent(`<div class="errcard"><div class="etitle">Kunne ikke hente avganger</div><div class="ebody">Prøv igjen om litt.</div></div>`);
   }
 }
 
@@ -703,4 +703,11 @@ function renderContent(){
       html=`<div class="empty"><div class="eicon">🛴</div><div>Ingen mikromobilitet funnet i nærheten</div></div>`;
     }
     c.innerHTML=html;
+  }
+}
+
+// Auto-refresh departures every 30s
+setInterval(()=>{if(loc&&curTab==="kollektiv")fetchTransit();},30000);
+
+initLoc();
 
