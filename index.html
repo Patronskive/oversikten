@@ -274,7 +274,6 @@ function initOpMap(name){
   const el=document.getElementById(mapId);
   if(!el)return;
   const center=op.vehicles[0];
-  const markers=op.vehicles.slice(0,15).map(v=>`&markers=color:red%7C${v.lat},${v.lon}`).join("");
   const bbox=0.003;
   const minLon=(center.lon-bbox).toFixed(5),minLat=(center.lat-bbox).toFixed(5),maxLon=(+center.lon+bbox).toFixed(5),maxLat=(+center.lat+bbox).toFixed(5);
   const markers=op.vehicles.slice(0,15).map(v=>`${v.lon},${v.lat}`).join("|");
