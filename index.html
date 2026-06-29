@@ -5,142 +5,82 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Johans guide</title>
 <meta name="theme-color" content="#0d0f1a">
-<style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  :root {
-    --bg: #0d0f1a;
-    --surface: #161929;
-    --surface2: #1e2235;
-    --border: rgba(255,255,255,0.07);
-    --border2: rgba(255,255,255,0.12);
-    --text: #e4e7f2;
-    --muted: #5a6080;
-    --accent: #5b7fff;
-    --accent-dim: rgba(91,127,255,0.15);
-    --accent-border: rgba(91,127,255,0.35);
-    --success: #34d399;
-    --warn: #fbbf24;
-    --danger: #f87171;
-  }
-  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-  body { display: flex; flex-direction: column; max-width: 480px; margin: 0 auto; min-height: 100vh; }
-
-  /* HEADER */
-  .header { padding: 20px 18px 0; background: linear-gradient(170deg, #12162a 0%, var(--bg) 100%); flex-shrink: 0; }
-  .header-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
-  .header-left .eyebrow { font-size: 10px; font-weight: 700; letter-spacing: .18em; color: var(--accent); text-transform: uppercase; margin-bottom: 5px; }
-  .header-left .place { font-size: 22px; font-weight: 700; letter-spacing: -.03em; line-height: 1.1; }
-  .header-left .place span { font-size: 13px; font-weight: 400; color: var(--muted); display: block; margin-top: 3px; }
-  .weather-badge { background: var(--surface); border: 1px solid var(--border2); border-radius: 14px; padding: 10px 14px; text-align: center; flex-shrink: 0; width: 80px; max-width: 80px; display: none; }
-  .weather-badge .wb-icon { font-size: 26px; line-height: 1; }
-  .weather-badge .wb-temp { font-size: 19px; font-weight: 700; margin-top: 3px; }
-  .weather-badge .wb-wind { font-size: 10px; color: var(--muted); margin-top: 2px; }
-
-  /* HOUR STRIP */
-  .hour-strip { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 14px; scrollbar-width: none; }
-  .hour-strip::-webkit-scrollbar { display: none; }
-  .hcard { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 7px 9px; text-align: center; flex-shrink: 0; min-width: 50px; }
-  .hcard.now { background: var(--accent-dim); border-color: var(--accent-border); }
-  .hcard .ht { font-size: 10px; color: var(--muted); font-weight: 600; margin-bottom: 3px; }
-  .hcard.now .ht { color: var(--accent); }
-  .hcard .hi { font-size: 17px; }
-  .hcard .htemp { font-size: 13px; font-weight: 600; margin-top: 3px; }
-  .hcard .hrain { font-size: 10px; color: #60a5fa; margin-top: 2px; }
-
-  /* TABS */
-  .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--bg); position: sticky; top: 0; z-index: 20; flex-shrink: 0; }
-  .tab { flex: 1; background: none; border: none; border-bottom: 2px solid transparent; color: var(--muted); cursor: pointer; font-size: 11px; font-weight: 600; padding: 11px 4px 9px; display: flex; flex-direction: column; align-items: center; gap: 3px; transition: color .15s; letter-spacing: .02em; }
-  .tab.active { border-bottom-color: var(--accent); color: var(--accent); }
-  .tab .ti { font-size: 19px; }
-
-  /* CONTENT */
-  .content { flex: 1; padding: 14px 16px 90px; overflow-y: auto; }
-
-  /* DEPARTURE CARDS */
-  .dep { background: var(--surface); border-radius: 13px; padding: 12px 14px; display: flex; align-items: center; gap: 11px; border: 1px solid var(--border); margin-bottom: 7px; transition: border-color .2s; }
-  .dep.soon { border-color: var(--accent-border); }
-  .lbadge { background: var(--surface2); border: 1px solid var(--border2); border-radius: 9px; padding: 5px 9px; font-size: 12px; font-weight: 800; flex-shrink: 0; min-width: 50px; text-align: center; }
-  .dep.soon .lbadge { background: var(--accent-dim); border-color: var(--accent-border); color: #a5b4fc; }
-  .dep-dest { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .dep-stop { font-size: 11px; color: var(--muted); margin-top: 2px; }
-  .dep-right { text-align: right; flex-shrink: 0; }
-  .dep-mins { font-size: 15px; font-weight: 800; }
-  .dep.soon .dep-mins { color: #818cf8; }
-  .dep-clock { font-size: 11px; color: var(--muted); }
-
-  /* STOP CARDS */
-  .stopcard { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
-  .stopcard-name { display: flex; align-items: center; gap: 9px; margin-bottom: 11px; font-weight: 700; font-size: 15px; }
-  .stop-dot { background: var(--accent-dim); border: 1px solid var(--accent-border); border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 14px; }
-  .minidep { display: flex; align-items: center; gap: 9px; padding: 7px 9px; background: var(--bg); border-radius: 9px; margin-bottom: 5px; }
-  .minidep:last-child { margin-bottom: 0; }
-  .minibadge { background: var(--surface2); border: 1px solid var(--border2); border-radius: 6px; padding: 2px 7px; font-size: 11px; font-weight: 800; flex-shrink: 0; }
-  .minidest { flex: 1; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #b0b4c8; }
-  .minitime { font-size: 12px; font-weight: 800; color: #818cf8; flex-shrink: 0; }
-
-  /* WEATHER */
-  .wcard { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin-bottom: 12px; }
-  .wcard-label { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .12em; margin-bottom: 12px; }
-  .whero { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
-  .wbig { font-size: 52px; font-weight: 800; letter-spacing: -.04em; line-height: 1; }
-  .wstats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 9px; }
-  .wstat { background: var(--bg); border-radius: 10px; padding: 10px 8px; text-align: center; }
-  .wstat-icon { font-size: 20px; margin-bottom: 3px; }
-  .wstat-val { font-size: 14px; font-weight: 700; }
-  .wstat-label { font-size: 10px; color: var(--muted); margin-top: 2px; }
-  .frow { display: flex; align-items: center; gap: 11px; padding: 9px 0; border-bottom: 1px solid var(--border); }
-  .frow:last-child { border-bottom: none; }
-  .ftime { font-size: 12px; color: var(--muted); width: 36px; flex-shrink: 0; }
-  .ficon { font-size: 20px; flex-shrink: 0; }
-  .fdetail { flex: 1; font-size: 11px; color: var(--muted); }
-  .ftemp { font-size: 14px; font-weight: 700; }
-
-  /* RESTAURANT CARDS */
-  .rcard { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; margin-bottom: 10px; display: flex; flex-direction: column; }
-  .rcard-body { padding: 13px 14px; }
-  .rcard-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 6px; }
-  .rcard-name { font-size: 15px; font-weight: 700; line-height: 1.2; }
-  .rcard-rating { background: var(--accent-dim); border: 1px solid var(--accent-border); border-radius: 7px; padding: 3px 8px; font-size: 12px; font-weight: 700; color: #a5b4fc; flex-shrink: 0; }
-  .rcard-type { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
-  .rcard-hours { font-size: 12px; display: flex; align-items: center; gap: 5px; }
-  .rcard-hours .open { color: var(--success); font-weight: 600; }
-  .rcard-hours .closed { color: var(--danger); font-weight: 600; }
-
-  /* EMPTY / SPINNER */
-  .empty { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 32px; text-align: center; color: var(--muted); }
-  .empty .eicon { font-size: 36px; margin-bottom: 10px; }
-  .spinner { text-align: center; padding: 52px; color: var(--muted); }
-  .spinner .sicon { font-size: 36px; margin-bottom: 12px; animation: spin 1.2s linear infinite; display: inline-block; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* FAB */
-  .fab { position: fixed; bottom: 22px; right: 18px; background: var(--accent); border: none; border-radius: 50%; width: 52px; height: 52px; font-size: 21px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 20px rgba(91,127,255,.45); z-index: 30; }
-
-  /* ERROR */
-  .errcard { background: rgba(248,113,113,.08); border: 1px solid rgba(248,113,113,.25); border-radius: 14px; padding: 20px; text-align: center; margin-bottom: 12px; }
-  .errcard .etitle { color: var(--danger); font-weight: 700; margin-bottom: 6px; }
-  .errcard .ebody { font-size: 13px; color: var(--muted); line-height: 1.5; }
-
-  .radius-bar{display:flex;gap:6px;margin-bottom:12px;align-items:center}
-  .radius-btn{background:var(--surface);border:0.5px solid var(--border);border-radius:8px;color:var(--muted);cursor:pointer;font-size:12px;font-weight:600;padding:6px 12px;transition:all .15s}
-  .radius-btn.active-radius{background:var(--accent-dim);border-color:var(--accent-border);color:var(--accent)}
-  .radius-label{font-size:11px;color:var(--muted);margin-right:4px}
-  /* BOTTOM BAR */
-  .bottom-bar { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px; padding: 10px 18px 18px; background: linear-gradient(0deg, var(--bg) 60%, transparent); display: flex; justify-content: space-between; align-items: center; z-index: 25; pointer-events: none; }
-  .loc-label { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 5px; pointer-events: all; }
-  .loc-label span { color: var(--text); font-weight: 500; }
-
-  /* SECTION LABEL */
-  .slabel { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .12em; margin-bottom: 10px; margin-top: 4px; }
-</style>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗺️</text></svg>">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d0f1a;--surface:#161929;--surface2:#1e2235;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.12);
+  --text:#e4e7f2;--muted:#5a6080;
+  --accent:#5b7fff;--accent-dim:rgba(91,127,255,0.15);--accent-border:rgba(91,127,255,0.35);
+  --success:#34d399;--warn:#fbbf24;--danger:#f87171;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}
+body{display:flex;flex-direction:column;max-width:480px;margin:0 auto;min-height:100vh;}
+.header{padding:20px 18px 0;background:linear-gradient(170deg,#12162a 0%,var(--bg) 100%);flex-shrink:0;}
+.header-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:16px;}
+.eyebrow{font-size:10px;font-weight:700;letter-spacing:.18em;color:var(--accent);text-transform:uppercase;margin-bottom:5px;}
+.place{font-size:22px;font-weight:700;letter-spacing:-.03em;line-height:1.1;}
+.place span{font-size:13px;font-weight:400;color:var(--muted);display:block;margin-top:3px;}
+.weather-badge{background:var(--surface);border:1px solid var(--border2);border-radius:14px;padding:10px 14px;text-align:center;flex-shrink:0;width:80px;display:none;}
+.wb-icon{font-size:26px;line-height:1;}
+.wb-temp{font-size:19px;font-weight:700;margin-top:3px;}
+.wb-wind{font-size:10px;color:var(--muted);margin-top:2px;}
+.wb-uv{font-size:10px;margin-top:2px;font-weight:600;display:none;}
+.hour-strip{display:flex;gap:6px;overflow-x:auto;padding-bottom:14px;scrollbar-width:none;}
+.hour-strip::-webkit-scrollbar{display:none;}
+.hcard{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:7px 9px;text-align:center;flex-shrink:0;min-width:50px;}
+.hcard.now{background:var(--accent-dim);border-color:var(--accent-border);}
+.ht{font-size:10px;color:var(--muted);font-weight:600;margin-bottom:3px;}
+.hcard.now .ht{color:var(--accent);}
+.hi{font-size:17px;}
+.htemp{font-size:13px;font-weight:600;margin-top:3px;}
+.hrain{font-size:10px;color:#60a5fa;margin-top:2px;}
+.tabs{display:flex;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:20;flex-shrink:0;}
+.tab{flex:1;background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;font-size:11px;font-weight:600;padding:11px 4px 9px;display:flex;flex-direction:column;align-items:center;gap:3px;transition:color .15s;}
+.tab.active{border-bottom-color:var(--accent);color:var(--accent);}
+.content{flex:1;padding:14px 16px 90px;overflow-y:auto;}
+.dep{background:var(--surface);border-radius:13px;padding:12px 14px;display:flex;align-items:center;gap:11px;border:1px solid var(--border);margin-bottom:7px;}
+.dep.soon{border-color:var(--accent-border);}
+.lbadge{background:var(--surface2);border:1px solid var(--border2);border-radius:9px;padding:5px 9px;font-size:12px;font-weight:800;flex-shrink:0;min-width:50px;text-align:center;}
+.dep.soon .lbadge{background:var(--accent-dim);border-color:var(--accent-border);color:#a5b4fc;}
+.dep-dest{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.dep-stop{font-size:11px;color:var(--muted);margin-top:2px;}
+.dep-right{text-align:right;flex-shrink:0;}
+.dep-mins{font-size:15px;font-weight:800;}
+.dep.soon .dep-mins{color:#818cf8;}
+.dep-clock{font-size:11px;color:var(--muted);}
+.rcard{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:10px;}
+.rcard-body{padding:13px 14px;}
+.rcard-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px;}
+.rcard-name{font-size:15px;font-weight:700;line-height:1.2;}
+.rcard-type{font-size:12px;color:var(--muted);margin-bottom:6px;}
+.rcard-hours{font-size:12px;display:flex;align-items:center;gap:5px;}
+.open{color:var(--success);font-weight:600;}
+.closed{color:var(--danger);font-weight:600;}
+.empty{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:32px;text-align:center;color:var(--muted);}
+.eicon{font-size:36px;margin-bottom:10px;}
+.spinner{text-align:center;padding:52px;color:var(--muted);}
+.sicon{font-size:36px;margin-bottom:12px;animation:spin 1.2s linear infinite;display:inline-block;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.errcard{background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.25);border-radius:14px;padding:20px;text-align:center;margin-bottom:12px;}
+.etitle{color:var(--danger);font-weight:700;margin-bottom:6px;}
+.ebody{font-size:13px;color:var(--muted);line-height:1.5;}
+.fab{position:fixed;bottom:22px;right:18px;background:var(--accent);border:none;border-radius:50%;width:52px;height:52px;font-size:21px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(91,127,255,.45);z-index:30;}
+.bottom-bar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;padding:10px 18px 18px;background:linear-gradient(0deg,var(--bg) 60%,transparent);display:flex;justify-content:space-between;align-items:center;z-index:25;pointer-events:none;}
+.loc-label{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;pointer-events:all;}
+.slabel{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;margin-bottom:10px;margin-top:4px;}
+.radius-bar{display:flex;gap:6px;margin-bottom:14px;align-items:center;flex-wrap:wrap;}
+.radius-label{font-size:11px;color:var(--muted);}
+.rbtn{background:var(--surface);border:1px solid var(--border2);border-radius:8px;color:var(--muted);cursor:pointer;font-size:12px;font-weight:600;padding:5px 12px;}
+.rbtn.active{background:var(--accent-dim);border-color:var(--accent-border);color:var(--accent);}
+</style>
 </head>
 <body>
-
 <div class="header">
   <div class="header-top">
-    <div class="header-left">
+    <div>
       <div class="eyebrow">Johans guide</div>
       <div class="place" id="place-name">Henter posisjon…<span id="place-sub"></span></div>
     </div>
@@ -148,168 +88,92 @@
       <div class="wb-icon" id="wb-icon"></div>
       <div class="wb-temp" id="wb-temp"></div>
       <div class="wb-wind" id="wb-wind"></div>
-      <div id="wb-uv" style="display:none;font-size:10px;margin-top:2px;font-weight:600"></div>
+      <div class="wb-uv" id="wb-uv"></div>
     </div>
   </div>
-  <div style="display:flex;gap:8px;padding-bottom:10px;flex-wrap:wrap" id="indicator-bar"></div>
   <div class="hour-strip" id="hour-strip"></div>
 </div>
-
 <div class="tabs">
-  <button class="tab active" onclick="setTab('kollektiv')" id="tab-kollektiv"><i class="ti ti-bus ti"></i>Kollektiv</button>
-  <button class="tab" onclick="setTab('mikro')" id="tab-mikro"><i class="ti ti-scooter ti"></i>Mikro</button>
-  <button class="tab" onclick="setTab('mat')" id="tab-mat"><i class="ti ti-tools-kitchen-2 ti"></i>Spise</button>
-  <button class="tab" onclick="setTab('utforsk')" id="tab-utforsk"><i class="ti ti-compass ti"></i>Utforsk</button>
+  <button class="tab active" onclick="setTab('kollektiv')" id="tab-kollektiv"><i class="ti ti-bus"></i>Kollektiv</button>
+  <button class="tab" onclick="setTab('mikro')" id="tab-mikro"><i class="ti ti-scooter"></i>Mikro</button>
+  <button class="tab" onclick="setTab('mat')" id="tab-mat"><i class="ti ti-tools-kitchen-2"></i>Spise</button>
+  <button class="tab" onclick="setTab('utforsk')" id="tab-utforsk"><i class="ti ti-compass"></i>Utforsk</button>
 </div>
-
 <div class="content" id="content">
   <div class="spinner"><span class="sicon">⟳</span><div>Henter posisjon…</div></div>
 </div>
-
 <div class="bottom-bar">
   <div class="loc-label" id="loc-label"></div>
 </div>
-<button class="fab" id="fab" style="display:none" onclick="refresh()" aria-label="Oppdater">↻</button>
+<button class="fab" id="fab" style="display:none" onclick="refresh()">↻</button>
 
 <script>
+// ── Constants ──────────────────────────────────────────────
 const WI={clearsky:"☀️",fair:"🌤️",partlycloudy:"⛅",cloudy:"☁️",rainshowers:"🌦️",rain:"🌧️",heavyrain:"🌧️",snow:"❄️",sleet:"🌨️",fog:"🌫️",thunder:"⛈️"};
 const MI={bus:"🚌",tram:"🚊",rail:"🚆",metro:"🚇",water:"⛴️",ferry:"⛴️"};
 
-function fetchWithTimeout(url, options={}, ms=8000){
-  const controller=new AbortController();
-  const id=setTimeout(()=>controller.abort(),ms);
-  return fetch(url,{...options,signal:controller.signal}).finally(()=>clearTimeout(id));
-}
+// ── State ──────────────────────────────────────────────────
+let loc=null, weather=null;
+let departures=[], stops=[], bikes=[], scooters=[];
+let restaurants=[], attractions=[];
+let fetchingRestaurants=false, restaurantsFetched=false;
+let fetchingAttractions=false, attractionsFetched=false;
+let curTab="kollektiv", transitRadius=300;
 
-async function fetchBikes(){
-  if(!loc)return;
-  try{
-    const [infoRes, statusRes] = await Promise.all([
-      fetchWithTimeout("https://gbfs.urbansharing.com/oslobysykkel.no/station_information.json",{headers:{"Client-Identifier":"johansguide-app"}},6000),
-      fetchWithTimeout("https://gbfs.urbansharing.com/oslobysykkel.no/station_status.json",{headers:{"Client-Identifier":"johansguide-app"}},6000)
-    ]);
-    const info = await infoRes.json();
-    const status = await statusRes.json();
-    const statusMap={};
-    (status.data?.stations||[]).forEach(s=>statusMap[s.station_id]=s);
-    bikes=(info.data?.stations||[])
-      .map(s=>({
-        id:s.station_id,
-        name:s.name,
-        lat:s.lat, lon:s.lon,
-        dist:Math.round(calcDist(loc.lat,loc.lon,s.lat,s.lon)),
-        bikes:statusMap[s.station_id]?.num_bikes_available??0,
-        docks:statusMap[s.station_id]?.num_docks_available??0,
-      }))
-      .filter(s=>s.dist<=1000)
-      .sort((a,b)=>a.dist-b.dist)
-      .slice(0,5);
-  }catch(e){console.error("Bikes error",e);}
-}
-
-async function fetchScooters(){
-  if(!loc)return;
-  try{
-    const q=`{
-      vehicles(lat:${loc.lat},lon:${loc.lon},range:500,count:50,includeReserved:false,includeDisabled:false){
-        id lat lon
-        currentFuelPercent
-        vehicleType{formFactor propulsionType}
-        system{name{translation{value}}}
-      }
-    }`;
-    const r=await fetchWithTimeout("https://api.entur.io/mobility/v2/graphql",{
-      method:"POST",
-      headers:{"Content-Type":"application/json","ET-Client-Name":"johansguide-app"},
-      body:JSON.stringify({query:q})
-    },6000);
-    const data=await r.json();
-    if(data.errors){console.error("Scooter errors:",JSON.stringify(data.errors));return;}
-    const vehicles=data.data?.vehicles||[];
-    const ops={};
-    vehicles.forEach(v=>{
-      const op=v.system?.name?.translation?.[0]?.value||"Ukjent";
-      const form=v.vehicleType?.formFactor||"";
-      const icon=form==="BICYCLE"?"🚲":form==="MOPED"?"🛵":form==="CARGO_BICYCLE"?"🚲":"🛴";
-      if(!ops[op])ops[op]={name:op,icon,count:0,closest:9999};
-      ops[op].count++;
-      const d=Math.round(calcDist(loc.lat,loc.lon,v.lat,v.lon));
-      if(d<ops[op].closest)ops[op].closest=d;
-    });
-    scooters=Object.values(ops).sort((a,b)=>a.closest-b.closest);
-    if(curTab==="kollektiv")renderContent();
-  }catch(e){console.error("Scooters error",e);}
-}
+// ── Helpers ────────────────────────────────────────────────
 function wi(s){if(!s)return"🌤️";const k=Object.keys(WI).find(k=>s.toLowerCase().includes(k));return k?WI[k]:"🌤️";}
 function mi(m){return MI[m?.toLowerCase()]||"🚌";}
 function fmt(iso){if(!iso)return"";return new Date(iso).toLocaleTimeString("no-NO",{hour:"2-digit",minute:"2-digit"});}
-function minsUntil(iso){if(!iso)return"–";const d=Math.round((new Date(iso)-Date.now())/60000);if(d<=0)return"nå";return d===1?"1 min":`${d} min`;}
-function isOpenNow(hours){
-  if(!hours||!hours.length)return null;
-  const days=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-  const today=days[new Date().getDay()];
-  const line=hours.find(h=>h.startsWith(today));
-  if(!line||line.includes("Closed"))return false;
-  const m=line.match(/(\d+):(\d+)\s*(AM|PM)\s*[–-]\s*(\d+):(\d+)\s*(AM|PM)/i);
-  if(!m)return null;
-  const to24=(h,min,ap)=>{let hh=parseInt(h);if(ap.toUpperCase()==="PM"&&hh!==12)hh+=12;if(ap.toUpperCase()==="AM"&&hh===12)hh=0;return hh*60+parseInt(min);};
-  const now=new Date().getHours()*60+new Date().getMinutes();
-  const open=to24(m[1],m[2],m[3]),close=to24(m[4],m[5],m[6]);
-  return now>=open&&now<close;
+function mins(iso){if(!iso)return"–";const d=Math.round((new Date(iso)-Date.now())/60000);if(d<=0)return"nå";return d===1?"1 min":`${d} min`;}
+function calcDist(lat1,lon1,lat2,lon2){
+  const R=6371000,dLat=(lat2-lat1)*Math.PI/180,dLon=(lon2-lon1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
-function todayHours(hours){
-  if(!hours||!hours.length)return"";
-  const days=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-  const today=days[new Date().getDay()];
-  const line=hours.find(h=>h.startsWith(today));
-  if(!line)return"";
-  return line.replace(today+": ","");
+function setContent(html){document.getElementById("content").innerHTML=html;}
+function fetchWithTimeout(url,options={},ms=8000){
+  const c=new AbortController();
+  const id=setTimeout(()=>c.abort(),ms);
+  return fetch(url,{...options,signal:c.signal}).finally(()=>clearTimeout(id));
 }
 
-let loc=null, weather=null, departures=[], stops=[], restaurants=[], attractions=[], bikes=[], scooters=[], curTab="kollektiv", transitRadius=300;
-let fetchingAttractions=false;
-let attractionsFetched=false;
-
-// Geolocation
+// ── Geolocation ────────────────────────────────────────────
 function initLoc(){
-  if(!navigator.geolocation){showLocError("Nettleseren støtter ikke lokasjon.");return;}
+  if(!navigator.geolocation){showErr("Nettleseren støtter ikke lokasjon.");return;}
   navigator.geolocation.getCurrentPosition(
     async p=>{
       loc={lat:p.coords.latitude,lon:p.coords.longitude};
       document.getElementById("fab").style.display="flex";
-      // Reverse geocode via nominatim
       document.getElementById("place-name").childNodes[0].textContent="Din lokasjon";
-      document.getElementById("loc-label").innerHTML=`<i class="ti ti-map-pin" style="font-size:13px"></i> ${loc.lat.toFixed(4)}, ${loc.lon.toFixed(4)}`;
-      // Reverse geocode in background, non-blocking
+      document.getElementById("loc-label").innerHTML=`📍 ${loc.lat.toFixed(4)}, ${loc.lon.toFixed(4)}`;
       fetchWithTimeout(`https://nominatim.openstreetmap.org/reverse?lat=${loc.lat}&lon=${loc.lon}&format=json`,{headers:{"User-Agent":"Johans guide/1.0"}},5000)
         .then(r=>r.json()).then(d=>{
           const nb=d.address?.neighbourhood||d.address?.suburb||d.address?.city_district||"";
           const city=d.address?.city||d.address?.town||"";
           document.getElementById("place-name").childNodes[0].textContent=nb||city||"Din lokasjon";
           document.getElementById("place-sub").textContent=nb&&city?city:"";
-          document.getElementById("loc-label").innerHTML=`<i class="ti ti-map-pin" style="font-size:13px"></i> ${nb||city||"Din lokasjon"}`;
+          document.getElementById("loc-label").innerHTML=`📍 ${nb||city||"Din lokasjon"}`;
         }).catch(()=>{});
       fetchAll();
     },
-    e=>{showLocError("Tillat lokasjon i nettleseren og last siden på nytt.");},
+    ()=>showErr("Tillat lokasjon i nettleseren og last siden på nytt."),
     {enableHighAccuracy:true,timeout:12000}
   );
 }
 
-function showLocError(msg){
+function showErr(msg){
   document.getElementById("place-name").childNodes[0].textContent="Ingen posisjon";
-  document.getElementById("content").innerHTML=`<div class="errcard"><div class="etitle">📍 Lokasjonstilgang mangler</div><div class="ebody">${msg}</div></div>`;
+  setContent(`<div class="errcard"><div class="etitle">📍 Lokasjonstilgang mangler</div><div class="ebody">${msg}</div></div>`);
 }
 
+// ── Fetch functions ────────────────────────────────────────
 async function fetchWeather(){
   if(!loc)return;
   try{
     const r=await fetchWithTimeout(`https://api.met.no/weatherapi/locationforecast/2.0/complete?lat=${loc.lat.toFixed(4)}&lon=${loc.lon.toFixed(4)}`,{headers:{"User-Agent":"Johans guide/1.0"}},8000);
     const d=await r.json();
     weather={current:d.properties?.timeseries?.[0],hours:d.properties?.timeseries?.slice(0,13)||[]};
-    const uv=weather.current?.data?.instant?.details?.ultraviolet_index_clear_sky;
-    weather.uv=(uv!=null)?uv:null;
-    weather.pollen=null;
+    weather.uv=weather.current?.data?.instant?.details?.ultraviolet_index_clear_sky??null;
     renderHeader();
   }catch(e){console.error("Weather error",e);}
 }
@@ -317,397 +181,220 @@ async function fetchWeather(){
 async function fetchTransit(){
   if(!loc)return;
   const pad=transitRadius===300?0.008:transitRadius===500?0.012:transitRadius===1000?0.018:0.03;
-  const minLat=loc.lat-pad, maxLat=loc.lat+pad, minLon=loc.lon-pad, maxLon=loc.lon+pad;
-  const q=`{stopPlacesByBbox(minimumLatitude:${minLat},maximumLatitude:${maxLat},minimumLongitude:${minLon},maximumLongitude:${maxLon}){id name latitude longitude estimatedCalls(timeRange:3600,numberOfDepartures:10){expectedDepartureTime destinationDisplay{frontText}serviceJourney{line{publicCode transportMode}}realtime}}}`;
+  const q=`{stopPlacesByBbox(minimumLatitude:${loc.lat-pad},maximumLatitude:${loc.lat+pad},minimumLongitude:${loc.lon-pad},maximumLongitude:${loc.lon+pad}){id name latitude longitude estimatedCalls(timeRange:3600,numberOfDepartures:10){expectedDepartureTime destinationDisplay{frontText}serviceJourney{line{publicCode transportMode}}}}}`;
   try{
-    const r=await fetchWithTimeout("https://api.entur.io/journey-planner/v3/graphql",{method:"POST",headers:{"Content-Type":"application/json","ET-Client-Name":"Johans guide-app"},body:JSON.stringify({query:q})},8000);
+    const r=await fetchWithTimeout("https://api.entur.io/journey-planner/v3/graphql",{method:"POST",headers:{"Content-Type":"application/json","ET-Client-Name":"johansguide-app"},body:JSON.stringify({query:q})},8000);
     const data=await r.json();
     const raw=(data.data?.stopPlacesByBbox||[])
       .filter(s=>s.estimatedCalls?.length&&s.latitude)
       .map(s=>({...s,dist:Math.round(calcDist(loc.lat,loc.lon,s.latitude,s.longitude))}))
       .sort((a,b)=>a.dist-b.dist);
-    const all=[];
-    raw.forEach(s=>s.estimatedCalls.forEach(c=>all.push({
-      stop:s.name,dist:s.dist,time:c.expectedDepartureTime,
-      dest:c.destinationDisplay?.frontText,
-      line:c.serviceJourney?.line?.publicCode,
-      mode:c.serviceJourney?.line?.transportMode
-    })));
-    all.sort((a,b)=>new Date(a.time)-new Date(b.time));
     const maxStops=transitRadius<=300?3:transitRadius<=500?5:8;
-    const filteredStops=raw.filter(s=>s.dist<=transitRadius);
-    const nearest=filteredStops.length?filteredStops.slice(0,maxStops):raw.slice(0,3);
+    const filtered=raw.filter(s=>s.dist<=transitRadius);
+    const nearest=filtered.length?filtered.slice(0,maxStops):raw.slice(0,3);
+    const all=[];
+    raw.forEach(s=>s.estimatedCalls.forEach(c=>all.push({stop:s.name,dist:s.dist,time:c.expectedDepartureTime,dest:c.destinationDisplay?.frontText,line:c.serviceJourney?.line?.publicCode,mode:c.serviceJourney?.line?.transportMode})));
+    all.sort((a,b)=>new Date(a.time)-new Date(b.time));
     departures=all.filter(d=>nearest.some(s=>s.name===d.stop)).slice(0,40);
     stops=nearest;
     if(curTab==="kollektiv")renderContent();
   }catch(e){
     console.error("Transit error",e);
-    if(curTab==="kollektiv")setContent(`<div class="errcard"><div class="etitle">Kunne ikke hente avganger</div><div class="ebody">Prøv igjen om litt.</div></div>`);
+    if(curTab==="kollektiv")setContent(`<div class="errcard"><div class="etitle">Kunne ikke hente avganger</div><div class="ebody">Prøv igjen.</div></div>`);
   }
 }
 
-let fetchingRestaurants=false;
-let restaurantsFetched=false;
+async function fetchBikes(){
+  if(!loc)return;
+  try{
+    const [ir,sr]=await Promise.all([
+      fetchWithTimeout("https://gbfs.urbansharing.com/oslobysykkel.no/station_information.json",{headers:{"Client-Identifier":"johansguide-app"}},6000),
+      fetchWithTimeout("https://gbfs.urbansharing.com/oslobysykkel.no/station_status.json",{headers:{"Client-Identifier":"johansguide-app"}},6000)
+    ]);
+    const info=await ir.json(), status=await sr.json();
+    const sm={};
+    (status.data?.stations||[]).forEach(s=>sm[s.station_id]=s);
+    bikes=(info.data?.stations||[])
+      .map(s=>({name:s.name,dist:Math.round(calcDist(loc.lat,loc.lon,s.lat,s.lon)),bikes:sm[s.station_id]?.num_bikes_available??0,docks:sm[s.station_id]?.num_docks_available??0}))
+      .filter(s=>s.dist<=1000).sort((a,b)=>a.dist-b.dist).slice(0,5);
+    if(curTab==="mikro")renderContent();
+  }catch(e){console.error("Bikes error",e);}
+}
+
+async function fetchScooters(){
+  if(!loc)return;
+  try{
+    const q=`{vehicles(lat:${loc.lat},lon:${loc.lon},range:500,count:50,includeReserved:false,includeDisabled:false){id lat lon vehicleType{formFactor}system{name{translation{value}}}}}`;
+    const r=await fetchWithTimeout("https://api.entur.io/mobility/v2/graphql",{method:"POST",headers:{"Content-Type":"application/json","ET-Client-Name":"johansguide-app"},body:JSON.stringify({query:q})},6000);
+    const data=await r.json();
+    if(data.errors){console.error("Scooter errors",data.errors);return;}
+    const ops={};
+    (data.data?.vehicles||[]).forEach(v=>{
+      const op=v.system?.name?.translation?.[0]?.value||"Ukjent";
+      const form=v.vehicleType?.formFactor||"";
+      const icon=form==="BICYCLE"||form==="CARGO_BICYCLE"?"🚲":form==="MOPED"?"🛵":"🛴";
+      if(!ops[op])ops[op]={name:op,icon,count:0,closest:9999};
+      ops[op].count++;
+      const d=Math.round(calcDist(loc.lat,loc.lon,v.lat,v.lon));
+      if(d<ops[op].closest)ops[op].closest=d;
+    });
+    scooters=Object.values(ops).sort((a,b)=>a.closest-b.closest);
+    if(curTab==="mikro")renderContent();
+  }catch(e){console.error("Scooters error",e);}
+}
+
 async function fetchRestaurants(){
   if(!loc||fetchingRestaurants||restaurantsFetched)return;
   fetchingRestaurants=true;
   try{
-    const fieldMask="places.displayName,places.rating,places.userRatingCount,places.priceLevel,places.currentOpeningHours,places.formattedAddress,places.location,places.primaryTypeDisplayName";
-    const body={
-      includedTypes:["restaurant","cafe","bar","bakery","meal_takeaway"],
-      maxResultCount:15,
-      rankPreference:"DISTANCE",
-      locationRestriction:{
-        circle:{
-          center:{latitude:loc.lat,longitude:loc.lon},
-          radius:800
-        }
-      }
-    };
     const r=await fetchWithTimeout("https://places.googleapis.com/v1/places:searchNearby",{
       method:"POST",
-      headers:{
-        "Content-Type":"application/json",
-        "X-Goog-Api-Key":"AIzaSyAg9DDMoznsaUQAHKZ7toQ6HR7XhhEunmI",
-        "X-Goog-FieldMask":fieldMask
-      },
-      body:JSON.stringify(body)
+      headers:{"Content-Type":"application/json","X-Goog-Api-Key":"AIzaSyAg9DDMoznsaUQAHKZ7toQ6HR7XhhEunmI","X-Goog-FieldMask":"places.displayName,places.rating,places.userRatingCount,places.priceLevel,places.currentOpeningHours,places.formattedAddress,places.location,places.primaryTypeDisplayName"},
+      body:JSON.stringify({includedTypes:["restaurant","cafe","bar","bakery","meal_takeaway"],maxResultCount:15,rankPreference:"DISTANCE",locationRestriction:{circle:{center:{latitude:loc.lat,longitude:loc.lon},radius:800}}})
     },8000);
     const data=await r.json();
-    if(data.error){throw new Error(data.error.message);}
+    if(data.error)throw new Error(data.error.message);
     restaurants=(data.places||[]).map(p=>({
-      name:p.displayName?.text||"",
-      type:p.primaryTypeDisplayName?.text||"",
-      rating:p.rating||null,
-      ratingCount:p.userRatingCount||null,
-      price:p.priceLevel||null,
-      open:p.currentOpeningHours?.openNow??null,
-      address:p.formattedAddress||"",
+      name:p.displayName?.text||"",type:p.primaryTypeDisplayName?.text||"",
+      rating:p.rating||null,ratingCount:p.userRatingCount||null,price:p.priceLevel||null,
+      open:p.currentOpeningHours?.openNow??null,address:p.formattedAddress||"",
       dist:Math.round(calcDist(loc.lat,loc.lon,p.location?.latitude||0,p.location?.longitude||0)),
-      lat:p.location?.latitude,
-      lon:p.location?.longitude,
     }));
-    fetchingRestaurants=false;
     restaurantsFetched=true;
     if(curTab==="mat")renderContent();
-  }catch(e){
-    fetchingRestaurants=false;
-    console.error("Restaurant error:",e.message||e);
-    if(curTab==="mat")setContent(`<div class="errcard"><div class="etitle">Kunne ikke hente restauranter</div><div class="ebody">${e.message||"Prøv igjen om litt."}</div></div>`);
-  }
+  }catch(e){console.error("Restaurant error",e);if(curTab==="mat")setContent(`<div class="errcard"><div class="etitle">Feil</div><div class="ebody">${e.message}</div></div>`);}
+  finally{fetchingRestaurants=false;}
 }
 
 async function fetchAttractions(){
   if(!loc||fetchingAttractions||attractionsFetched)return;
   fetchingAttractions=true;
   try{
-    const fieldMask="places.displayName,places.rating,places.userRatingCount,places.formattedAddress,places.location,places.primaryTypeDisplayName,places.currentOpeningHours";
-    const body={
-      includedTypes:["museum","art_gallery","tourist_attraction","park","monument","aquarium","zoo","amusement_park","stadium","cultural_landmark","historical_place","national_park","performing_arts_theater","visitor_center"],
-      maxResultCount:15,
-      rankPreference:"DISTANCE",
-      locationRestriction:{
-        circle:{
-          center:{latitude:loc.lat,longitude:loc.lon},
-          radius:2000
-        }
-      }
-    };
     const r=await fetchWithTimeout("https://places.googleapis.com/v1/places:searchNearby",{
       method:"POST",
-      headers:{
-        "Content-Type":"application/json",
-        "X-Goog-Api-Key":"AIzaSyAg9DDMoznsaUQAHKZ7toQ6HR7XhhEunmI",
-        "X-Goog-FieldMask":fieldMask
-      },
-      body:JSON.stringify(body)
+      headers:{"Content-Type":"application/json","X-Goog-Api-Key":"AIzaSyAg9DDMoznsaUQAHKZ7toQ6HR7XhhEunmI","X-Goog-FieldMask":"places.displayName,places.rating,places.userRatingCount,places.formattedAddress,places.location,places.primaryTypeDisplayName,places.currentOpeningHours"},
+      body:JSON.stringify({includedTypes:["museum","art_gallery","tourist_attraction","park","monument","aquarium","zoo","amusement_park","stadium","cultural_landmark","historical_place","national_park","performing_arts_theater","visitor_center"],maxResultCount:15,rankPreference:"DISTANCE",locationRestriction:{circle:{center:{latitude:loc.lat,longitude:loc.lon},radius:2000}}})
     },8000);
     const data=await r.json();
     if(data.error)throw new Error(data.error.message);
-    attractions=(data.places||[]).filter(p=>p.rating&&p.rating>=3.5).map(p=>({
-      name:p.displayName?.text||"",
-      type:p.primaryTypeDisplayName?.text||"",
-      rating:p.rating||null,
-      ratingCount:p.userRatingCount||null,
-      open:p.currentOpeningHours?.openNow??null,
-      address:p.formattedAddress||"",
+    attractions=(data.places||[]).filter(p=>p.rating>=3.5).map(p=>({
+      name:p.displayName?.text||"",type:p.primaryTypeDisplayName?.text||"",
+      rating:p.rating||null,ratingCount:p.userRatingCount||null,
+      open:p.currentOpeningHours?.openNow??null,address:p.formattedAddress||"",
       dist:Math.round(calcDist(loc.lat,loc.lon,p.location?.latitude||0,p.location?.longitude||0)),
-      lat:p.location?.latitude,
-      lon:p.location?.longitude,
     }));
-    fetchingAttractions=false;
     attractionsFetched=true;
     if(curTab==="utforsk")renderContent();
-  }catch(e){
-    fetchingAttractions=false;
-    console.error("Attractions error:",e.message||e);
-    if(curTab==="utforsk")setContent(`<div class="errcard"><div class="etitle">Kunne ikke hente steder</div><div class="ebody">${e.message||"Prøv igjen om litt."}</div></div>`);
-  }
-}
-function formatType(t){
-  const map={restaurant:"Restaurant",cafe:"Kafé",fast_food:"Hurtigmat",bar:"Bar",pizza:"Pizza",burger:"Burger",sushi:"Sushi",asian:"Asiatisk",italian:"Italiensk",norwegian:"Norsk",chinese:"Kinesisk",indian:"Indisk",mexican:"Meksikansk",kebab:"Kebab",bakery:"Bakeri"};
-  return t.split(";").map(s=>map[s.trim()]||s.trim()).filter(Boolean).join(", ");
+  }catch(e){console.error("Attractions error",e);if(curTab==="utforsk")setContent(`<div class="errcard"><div class="etitle">Feil</div><div class="ebody">${e.message}</div></div>`);}
+  finally{fetchingAttractions=false;}
 }
 
-function calcDist(lat1,lon1,lat2,lon2){
-  const R=6371000;
-  const dLat=(lat2-lat1)*Math.PI/180;
-  const dLon=(lon2-lon1)*Math.PI/180;
-  const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
-  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
-}
-
-
-function parseOH(str){
-  if(!str)return null;
-  try{
-    const days=["Su","Mo","Tu","We","Th","Fr","Sa"];
-    const today=days[new Date().getDay()];
-    // Handle simple "Mo-Fr 09:00-22:00; Sa-Su 10:00-20:00" format
-    const parts=str.split(";").map(s=>s.trim());
-    for(const part of parts){
-      const m=part.match(/^([A-Za-z,-]+)\s+(\d{2}:\d{2})-(\d{2}:\d{2})$/);
-      if(!m)continue;
-      const range=m[1];
-      // Check if today is in range
-      const inRange=range.split(",").some(r=>{
-        const dash=r.indexOf("-");
-        if(dash===-1)return r.trim()===today;
-        const s=days.indexOf(r.slice(0,dash).trim()),e=days.indexOf(r.slice(dash+1).trim());
-        const t=days.indexOf(today);
-        return s!==-1&&e!==-1&&t>=s&&t<=e;
-      });
-      if(inRange){
-        const now=new Date().getHours()*60+new Date().getMinutes();
-        const [oh,om]=m[2].split(":").map(Number);
-        const [ch,cm]=m[3].split(":").map(Number);
-        return{open:now>=oh*60+om&&now<ch*60+cm,hours:m[2]+"–"+m[3]};
-      }
-    }
-    return null;
-  }catch(e){return null;}
-}
+// ── Orchestration ──────────────────────────────────────────
 function fetchAll(){
   setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter data…</div></div>`);
-  weather=null;departures=[];stops=[];restaurants=[];attractions=[];bikes=[];scooters=[];
-  restaurantsFetched=false;attractionsFetched=false;fetchingRestaurants=false;fetchingAttractions=false;
-  fetchWeather();
-  fetchTransit();
-  fetchBikes();
-  fetchScooters();
+  weather=null;departures=[];stops=[];bikes=[];scooters=[];
+  restaurants=[];attractions=[];
+  restaurantsFetched=false;attractionsFetched=false;
+  fetchWeather();fetchTransit();fetchBikes();fetchScooters();
 }
 
 function refresh(){
   fetchAll();
 }
 
-function renderHeader(){
-  if(!weather)return;
-  const cur=weather.current?.data;
-  const temp=cur?.instant?.details?.air_temperature;
-  const sym=cur?.next_1_hours?.summary?.symbol_code||cur?.next_6_hours?.summary?.symbol_code;
-  const wind=cur?.instant?.details?.wind_speed;
-  if(temp!=null){
-    const b=document.getElementById("weather-badge");
-    b.style.display="block";
-    document.getElementById("wb-icon").textContent=wi(sym);
-    document.getElementById("wb-temp").textContent=Math.round(temp)+"°";
-    document.getElementById("wb-wind").textContent=wind!=null?"💨 "+Math.round(wind)+" m/s":"";
-    const uvRaw=weather.current?.data?.instant?.details?.ultraviolet_index_clear_sky;
-    const uvVal=uvRaw!=null?uvRaw:null;
-    weather.uv=uvVal;
-    const wbUv=document.getElementById("wb-uv");
-    if(wbUv){
-      if(uvVal!=null){
-        const uvColor=uvVal===0?"#5a6080":uvVal<=2?"#34d399":uvVal<=5?"#fbbf24":uvVal<=7?"#f97316":"#f87171";
-        const uvLabel="☀️ UV "+uvVal;
-        wbUv.textContent=uvLabel;
-        wbUv.style.color=uvColor;
-        wbUv.style.display="block";
-      } else {
-        wbUv.textContent="☀️ UV –";
-        wbUv.style.color="#5a6080";
-        wbUv.style.display="block";
-      }
-    }
-  }
-  // UV + pollen indicators
-  const indBar=document.getElementById("indicator-bar");
-  if(indBar){
-    let indHtml="";
-    if(weather.uv!=null&&weather.uv>=0){
-      const uvColor=weather.uv===0?"var(--muted)":weather.uv<=2?"#34d399":weather.uv<=5?"#fbbf24":weather.uv<=7?"#f97316":"#f87171";
-      const uvLabel=weather.uv===0?"Ingen":weather.uv<=2?"Lav":weather.uv<=5?"Moderat":weather.uv<=7?"Høy":"Svært høy";
-      indHtml+=`<div style="display:flex;align-items:center;background:var(--surface);border:0.5px solid var(--border);border-radius:8px;padding:5px 10px;gap:6px"><span style="font-size:11px;color:var(--muted)">☀️ UV</span><span style="font-size:11px;font-weight:700;color:${uvColor}">${weather.uv} – ${uvLabel}</span></div>`;
-    }
-    if(weather.pollen!=null){
-      const pColor=weather.pollen<=1?"#34d399":weather.pollen<=3?"#fbbf24":weather.pollen<=5?"#f97316":"#f87171";
-      const pLabel=weather.pollen<=1?"Lav":weather.pollen<=3?"Moderat":weather.pollen<=5?"Høy":"Svært høy";
-      indHtml+=`<div style="display:flex;align-items:center;background:var(--surface);border:0.5px solid var(--border);border-radius:8px;padding:5px 10px;gap:6px"><span style="font-size:11px;color:var(--muted)">🌿 Pollen</span><span style="font-size:11px;font-weight:700;color:${pColor}">${pLabel}</span></div>`;
-    }
-    indBar.innerHTML=indHtml;
-  }
-  document.getElementById("hour-strip").innerHTML=weather.hours.map((ts,i)=>{
-    const t=ts.data?.instant?.details?.air_temperature;
-    const s=ts.data?.next_1_hours?.summary?.symbol_code;
-    const p=ts.data?.next_1_hours?.details?.precipitation_amount;
-    return `<div class="hcard${i===0?" now":""}">
-      <div class="ht">${i===0?"nå":new Date(ts.time).toLocaleTimeString("no-NO",{hour:"2-digit",minute:"2-digit"})}</div>
-      <div class="hi">${wi(s)}</div>
-      <div class="htemp">${Math.round(t)}°</div>
-      ${p>0?`<div class="hrain">${p}mm</div>`:""}
-    </div>`;
-  }).join("");
-}
-
-function setContent(html){document.getElementById("content").innerHTML=html;}
-
 function setTab(t){
   curTab=t;
   document.querySelectorAll(".tab").forEach(el=>el.classList.remove("active"));
   document.getElementById("tab-"+t).classList.add("active");
-  if(t==="mat"&&!restaurants.length&&loc&&!fetchingRestaurants)fetchRestaurants();
-  else if(t==="utforsk"&&!attractions.length&&loc&&!fetchingAttractions)fetchAttractions();
+  if(t==="mat"&&!restaurantsFetched&&!fetchingRestaurants&&loc)fetchRestaurants();
+  else if(t==="utforsk"&&!attractionsFetched&&!fetchingAttractions&&loc)fetchAttractions();
   else renderContent();
 }
 
 function setRadius(r){
   transitRadius=r;
   departures=[];stops=[];
-  document.querySelectorAll(".radius-btn").forEach(el=>el.classList.remove("active-radius"));
-  document.getElementById("radius-"+r).classList.add("active-radius");
+  renderContent();
   fetchTransit();
 }
 
+// ── Render header ──────────────────────────────────────────
+function renderHeader(){
+  if(!weather)return;
+  const cur=weather.current?.data;
+  const temp=cur?.instant?.details?.air_temperature;
+  const sym=cur?.next_1_hours?.summary?.symbol_code||cur?.next_6_hours?.summary?.symbol_code;
+  const wind=cur?.instant?.details?.wind_speed;
+  const uv=weather.uv;
+  if(temp!=null){
+    const b=document.getElementById("weather-badge");
+    b.style.display="block";
+    document.getElementById("wb-icon").textContent=wi(sym);
+    document.getElementById("wb-temp").textContent=Math.round(temp)+"°";
+    document.getElementById("wb-wind").textContent=wind!=null?"💨 "+Math.round(wind)+" m/s":"";
+    const uvEl=document.getElementById("wb-uv");
+    if(uv!=null){
+      const uvColor=uv===0?"#5a6080":uv<=2?"#34d399":uv<=5?"#fbbf24":uv<=7?"#f97316":"#f87171";
+      uvEl.textContent="☀️ UV "+uv;
+      uvEl.style.color=uvColor;
+      uvEl.style.display="block";
+    }
+  }
+  document.getElementById("hour-strip").innerHTML=weather.hours.map((ts,i)=>{
+    const t=ts.data?.instant?.details?.air_temperature;
+    const s=ts.data?.next_1_hours?.summary?.symbol_code;
+    const p=ts.data?.next_1_hours?.details?.precipitation_amount;
+    return `<div class="hcard${i===0?" now":""}"><div class="ht">${i===0?"nå":new Date(ts.time).toLocaleTimeString("no-NO",{hour:"2-digit",minute:"2-digit"})}</div><div class="hi">${wi(s)}</div><div class="htemp">${Math.round(t)}°</div>${p>0?`<div class="hrain">${p}mm</div>`:""}</div>`;
+  }).join("");
+}
+
+// ── Render content ─────────────────────────────────────────
 function renderContent(){
   const c=document.getElementById("content");
+
   if(curTab==="kollektiv"){
-    if(!loc){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter posisjon…</div></div>`);return;}
-    const radiusBar=`<div class="radius-bar">
-      <span class="radius-label">Radius:</span>
-      <button class="radius-btn${transitRadius===300?" active-radius":""}" id="radius-300" onclick="setRadius(300)">300m</button>
-      <button class="radius-btn${transitRadius===500?" active-radius":""}" id="radius-500" onclick="setRadius(500)">500m</button>
-      <button class="radius-btn${transitRadius===1000?" active-radius":""}" id="radius-1000" onclick="setRadius(1000)">1 km</button>
-      <button class="radius-btn${transitRadius===2000?" active-radius":""}" id="radius-2000" onclick="setRadius(2000)">2 km</button>
-    </div>`;
-    if(!departures.length){setContent(radiusBar+`<div class="spinner"><span class="sicon">⟳</span><div>Henter avganger…</div></div>`);return;}
-    const scooterHtml=scooters.length?`
-      <div class="slabel" style="margin-top:18px">Sparkesykler i nærheten</div>`+
-      scooters.map(s=>`
-        <div class="dep">
-          <div class="lbadge" style="font-size:18px">${s.icon||"🛴"}</div>
-          <div style="flex:1;min-width:0">
-            <div class="dep-dest">${s.name}</div>
-            <div class="dep-stop">Nærmeste: ${s.closest}m unna</div>
-          </div>
-          <div class="dep-right">
-            <div style="font-size:14px;font-weight:700;color:var(--success)">${s.count} tilgjengelig</div>
-          </div>
-        </div>`).join(""):"";
-    const bikeHtml=bikes.length?`
-      <div class="slabel" style="margin-top:18px">Bysykkel</div>`+
-      bikes.map(b=>`
-        <div class="dep">
-          <div class="lbadge" style="font-size:18px">🚲</div>
-          <div style="flex:1;min-width:0">
-            <div class="dep-dest">${b.name}</div>
-            <div class="dep-stop">${b.dist}m unna</div>
-          </div>
-          <div class="dep-right">
-            <div style="font-size:14px;font-weight:700;color:${b.bikes>0?'var(--success)':'var(--danger)'}">${b.bikes} ledig</div>
-            <div class="dep-clock">${b.docks} lås</div>
-          </div>
-        </div>`).join(""):"";
-    c.innerHTML=radiusBar+`<div class="slabel">Neste avganger</div>`+departures.map(dep=>{
-      const m=minsUntil(dep.time);
-      const soon=m==="nå"||(typeof m==="string"&&parseInt(m)<=3);
-      return `<div class="dep${soon?" soon":""}">
-        <div class="lbadge">${mi(dep.mode)}${dep.line}</div>
-        <div style="flex:1;min-width:0"><div class="dep-dest">${dep.dest||"–"}</div><div class="dep-stop">${dep.stop}${dep.dist?` · ${dep.dist}m`:""}</div></div>
-        <div class="dep-right"><div class="dep-mins">${m}</div><div class="dep-clock">${fmt(dep.time)}</div></div>
-      </div>`;
+    const rbar=`<div class="radius-bar"><span class="radius-label">Radius:</span><button class="rbtn${transitRadius===300?" active":""}" onclick="setRadius(300)">300m</button><button class="rbtn${transitRadius===500?" active":""}" onclick="setRadius(500)">500m</button><button class="rbtn${transitRadius===1000?" active":""}" onclick="setRadius(1000)">1 km</button><button class="rbtn${transitRadius===2000?" active":""}" onclick="setRadius(2000)">2 km</button></div>`;
+    if(!departures.length){setContent(rbar+`<div class="spinner"><span class="sicon">⟳</span><div>Henter avganger…</div></div>`);return;}
+    c.innerHTML=rbar+`<div class="slabel">Neste avganger</div>`+departures.map(dep=>{
+      const m=mins(dep.time),soon=m==="nå"||(typeof m==="string"&&parseInt(m)<=3);
+      return `<div class="dep${soon?" soon":""}"><div class="lbadge">${mi(dep.mode)}${dep.line}</div><div style="flex:1;min-width:0"><div class="dep-dest">${dep.dest||"–"}</div><div class="dep-stop">${dep.stop}${dep.dist?` · ${dep.dist}m`:""}</div></div><div class="dep-right"><div class="dep-mins">${m}</div><div class="dep-clock">${fmt(dep.time)}</div></div></div>`;
     }).join("");
-  } else if(curTab==="mat"){
-    if(!loc){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter posisjon…</div></div>`);return;}
-    if(!restaurants.length){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter restauranter…</div></div>`);return;}
-    const priceMap={PRICE_LEVEL_FREE:"",PRICE_LEVEL_INEXPENSIVE:"kr",PRICE_LEVEL_MODERATE:"kr kr",PRICE_LEVEL_EXPENSIVE:"kr kr kr",PRICE_LEVEL_VERY_EXPENSIVE:"kr kr kr kr"};
-    c.innerHTML=`<div class="slabel">Nærmeste steder å spise</div>`+restaurants.map(r=>{
-      const stars=r.rating?`<span style="color:#fbbf24">★</span> <strong>${r.rating.toFixed(1)}</strong> <span style="color:var(--muted);font-size:11px">(${r.ratingCount?.toLocaleString("no-NO")||0})</span>`:"";
-      const price=r.price&&priceMap[r.price]?`<span style="color:var(--muted);margin-left:8px">${priceMap[r.price]}</span>`:"";
-      const openBadge=r.open===true?`<span class="open">Åpent nå</span>`:r.open===false?`<span class="closed">Stengt</span>`:"";
-      return `<div class="rcard">
-        <div class="rcard-body">
-          <div class="rcard-top">
-            <a class="rcard-name" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.name+' '+r.address)}" target="_blank" style="color:var(--text);text-decoration:none">${r.name} <i class="ti ti-external-link" style="font-size:13px;color:var(--muted);vertical-align:middle"></i></a>
-            <div style="font-size:11px;color:var(--muted);flex-shrink:0">📍 ${r.dist}m</div>
-          </div>
-          ${r.type?`<div class="rcard-type">${r.type}${price}</div>`:""}
-          ${stars?`<div style="font-size:13px;margin:5px 0">${stars}</div>`:""}
-          ${openBadge?`<div class="rcard-hours">${openBadge}</div>`:""}
-        </div>
-      </div>`;
-    }).join("");
-  } else if(curTab==="utforsk"){
-    if(!loc){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter posisjon…</div></div>`);return;}
-    if(!attractions.length){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter steder…</div></div>`);return;}
-    c.innerHTML=`<div class="slabel">I nærheten (2 km)</div>`+attractions.map(r=>{
-      const stars=r.rating?`<span style="color:#fbbf24">★</span> <strong>${r.rating.toFixed(1)}</strong> <span style="color:var(--muted);font-size:11px">(${r.ratingCount?.toLocaleString("no-NO")||0})</span>`:"";
-      const openBadge=r.open===true?`<span class="open">Åpent nå</span>`:r.open===false?`<span class="closed">Stengt</span>`:"";
-      return `<div class="rcard">
-        <div class="rcard-body">
-          <div class="rcard-top">
-            <a class="rcard-name" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.name+' '+r.address)}" target="_blank" style="color:var(--text);text-decoration:none">${r.name} <i class="ti ti-external-link" style="font-size:13px;color:var(--muted);vertical-align:middle"></i></a>
-            <div style="font-size:11px;color:var(--muted);flex-shrink:0">📍 ${r.dist}m</div>
-          </div>
-          ${r.type?`<div class="rcard-type">${r.type}</div>`:""}
-          ${stars?`<div style="font-size:13px;margin:5px 0">${stars}</div>`:""}
-          ${openBadge?`<div class="rcard-hours">${openBadge}</div>`:""}
-        </div>
-      </div>`;
-    }).join("");
+
   } else if(curTab==="mikro"){
-    if(!loc){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter posisjon…</div></div>`);return;}
     let html="";
-    // Bysykkel
     if(bikes.length){
       html+=`<div class="slabel">Bysykkel</div>`;
-      html+=bikes.map(b=>`
-        <div class="dep">
-          <div class="lbadge" style="font-size:18px">🚲</div>
-          <div style="flex:1;min-width:0">
-            <div class="dep-dest">${b.name}</div>
-            <div class="dep-stop">${b.dist}m unna</div>
-          </div>
-          <div class="dep-right">
-            <div style="font-size:14px;font-weight:700;color:${b.bikes>0?"var(--success)":"var(--danger)"}">${b.bikes} ledig</div>
-            <div class="dep-clock">${b.docks} lås</div>
-          </div>
-        </div>`).join("");
+      html+=bikes.map(b=>`<div class="dep"><div class="lbadge" style="font-size:18px">🚲</div><div style="flex:1;min-width:0"><div class="dep-dest">${b.name}</div><div class="dep-stop">${b.dist}m unna</div></div><div class="dep-right"><div class="dep-mins" style="color:${b.bikes>0?"var(--success)":"var(--danger)"}">${b.bikes}</div><div class="dep-clock">${b.docks} lås</div></div></div>`).join("");
     }
-    // Sparkesykler
     if(scooters.length){
-      html+=`<div class="slabel" style="margin-top:${bikes.length?18:0}px">Sparkesykler</div>`;
-      html+=scooters.map(s=>`
-        <div class="dep">
-          <div class="lbadge" style="font-size:18px">${s.icon||"🛴"}</div>
-          <div style="flex:1;min-width:0">
-            <div class="dep-dest">${s.name}</div>
-            <div class="dep-stop">Nærmeste: ${s.closest}m unna</div>
-          </div>
-          <div class="dep-right">
-            <div style="font-size:14px;font-weight:700;color:var(--success)">${s.count} tilgjengelig</div>
-          </div>
-        </div>`).join("");
+      html+=`<div class="slabel" style="margin-top:${bikes.length?16:0}px">Sparkesykler</div>`;
+      html+=scooters.map(s=>`<div class="dep"><div class="lbadge" style="font-size:18px">${s.icon||"🛴"}</div><div style="flex:1;min-width:0"><div class="dep-dest">${s.name}</div><div class="dep-stop">Nærmeste: ${s.closest}m</div></div><div class="dep-right"><div class="dep-mins" style="color:var(--success)">${s.count}</div><div class="dep-clock">tilgjengelig</div></div></div>`).join("");
     }
-    if(!bikes.length&&!scooters.length){
-      html=`<div class="empty"><div class="eicon">🛴</div><div>Ingen mikromobilitet funnet i nærheten</div></div>`;
-    }
+    if(!bikes.length&&!scooters.length) html=`<div class="empty"><div class="eicon">🛴</div><div>Ingen mikromobilitet funnet</div></div>`;
     c.innerHTML=html;
+
+  } else if(curTab==="mat"){
+    if(!restaurantsFetched){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter restauranter…</div></div>`);return;}
+    const pm={PRICE_LEVEL_INEXPENSIVE:"kr",PRICE_LEVEL_MODERATE:"kr kr",PRICE_LEVEL_EXPENSIVE:"kr kr kr",PRICE_LEVEL_VERY_EXPENSIVE:"kr kr kr kr"};
+    c.innerHTML=`<div class="slabel">Nærmeste steder å spise</div>`+restaurants.map(r=>{
+      const stars=r.rating?`<span style="color:#fbbf24">★</span> <strong>${r.rating.toFixed(1)}</strong> <span style="color:var(--muted);font-size:11px">(${r.ratingCount?.toLocaleString("no-NO")||0})</span>`:"";
+      const price=r.price&&pm[r.price]?`<span style="color:var(--muted);margin-left:6px">${pm[r.price]}</span>`:"";
+      const ob=r.open===true?`<span class="open">Åpent nå</span>`:r.open===false?`<span class="closed">Stengt</span>`:"";
+      return `<div class="rcard"><div class="rcard-body"><div class="rcard-top"><a class="rcard-name" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.name+' '+r.address)}" target="_blank" style="color:var(--text);text-decoration:none">${r.name} <i class="ti ti-external-link" style="font-size:12px;color:var(--muted)"></i></a><div style="font-size:11px;color:var(--muted)">📍 ${r.dist}m</div></div>${r.type?`<div class="rcard-type">${r.type}${price}</div>`:""}${stars?`<div style="font-size:13px;margin:4px 0">${stars}</div>`:""}${ob?`<div class="rcard-hours">${ob}</div>`:""}</div></div>`;
+    }).join("");
+
+  } else if(curTab==="utforsk"){
+    if(!attractionsFetched){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter steder…</div></div>`);return;}
+    c.innerHTML=`<div class="slabel">I nærheten (2 km)</div>`+attractions.map(r=>{
+      const stars=r.rating?`<span style="color:#fbbf24">★</span> <strong>${r.rating.toFixed(1)}</strong> <span style="color:var(--muted);font-size:11px">(${r.ratingCount?.toLocaleString("no-NO")||0})</span>`:"";
+      const ob=r.open===true?`<span class="open">Åpent nå</span>`:r.open===false?`<span class="closed">Stengt</span>`:"";
+      return `<div class="rcard"><div class="rcard-body"><div class="rcard-top"><a class="rcard-name" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.name+' '+r.address)}" target="_blank" style="color:var(--text);text-decoration:none">${r.name} <i class="ti ti-external-link" style="font-size:12px;color:var(--muted)"></i></a><div style="font-size:11px;color:var(--muted)">📍 ${r.dist}m</div></div>${r.type?`<div class="rcard-type">${r.type}</div>`:""}${stars?`<div style="font-size:13px;margin:4px 0">${stars}</div>`:""}${ob?`<div class="rcard-hours">${ob}</div>`:""}</div></div>`;
+    }).join("");
   }
 }
 
-// Auto-refresh departures every 30s
 setInterval(()=>{if(loc&&curTab==="kollektiv")fetchTransit();},30000);
-
 initLoc();
-
+</script>
+</body>
+</html>
