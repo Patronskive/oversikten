@@ -202,6 +202,30 @@ async function fetchBikes(){
       .slice(0,5);
   }catch(e){console.error("Bikes error",e);}
 }
+
+async function fetchScooters(){
+  if(!loc)return;
+  try{
+    // Entur Shared Mobility - get all operators near location
+    const url=`https://api.entur.io/mobility/v2/gbfs/vehicles?lat=${loc.lat}&lon=${loc.lon}&range=500&count=50`;
+    const r=await fetchWithTimeout(url,{headers:{"ET-Client-Name":"johansguide-app","Accept":"application/json"}},6000);
+    const data=await r.json();
+    const vehicles=data.vehicles||[];
+    
+    // Group by operator and count
+    const ops={};
+    vehicles.forEach(v=>{
+      const op=v.system?.name||v.system_id||"Ukjent";
+      const icon=v.form_factor==="bicycle"?"🚲":v.form_factor==="moped"?"🛵":"🛴";
+      if(!ops[op])ops[op]={name:op,icon,count:0,closest:9999};
+      ops[op].count++;
+      const d=Math.round(calcDist(loc.lat,loc.lon,v.lat,v.lon));
+      if(d<ops[op].closest)ops[op].closest=d;
+    });
+    
+    scooters=Object.values(ops).sort((a,b)=>a.closest-b.closest);
+  }catch(e){console.error("Scooters error",e);}
+}
 function wi(s){if(!s)return"🌤️";const k=Object.keys(WI).find(k=>s.toLowerCase().includes(k));return k?WI[k]:"🌤️";}
 function mi(m){return MI[m?.toLowerCase()]||"🚌";}
 function fmt(iso){if(!iso)return"";return new Date(iso).toLocaleTimeString("no-NO",{hour:"2-digit",minute:"2-digit"});}
@@ -228,7 +252,7 @@ function todayHours(hours){
   return line.replace(today+": ","");
 }
 
-let loc=null, weather=null, departures=[], stops=[], restaurants=[], attractions=[], bikes=[], curTab="avg";
+let loc=null, weather=null, departures=[], stops=[], restaurants=[], attractions=[], bikes=[], scooters=[], curTab="avg";
 let fetchingAttractions=false;
 let attractionsFetched=false;
 
@@ -449,11 +473,12 @@ function parseOH(str){
 }
 function fetchAll(){
   setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter data…</div></div>`);
-  weather=null;departures=[];stops=[];restaurants=[];attractions=[];bikes=[];
+  weather=null;departures=[];stops=[];restaurants=[];attractions=[];bikes=[];scooters=[];
   restaurantsFetched=false;attractionsFetched=false;fetchingRestaurants=false;fetchingAttractions=false;
   fetchWeather();
   fetchTransit();
   fetchBikes();
+  fetchScooters();
 }
 
 function refresh(){
@@ -535,6 +560,19 @@ function renderContent(){
   if(curTab==="avg"){
     if(!loc){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter posisjon…</div></div>`);return;}
     if(!departures.length){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter avganger…</div></div>`);return;}
+    const scooterHtml=scooters.length?`
+      <div class="slabel" style="margin-top:18px">Sparkesykler i nærheten</div>`+
+      scooters.map(s=>`
+        <div class="dep">
+          <div class="lbadge" style="font-size:18px">${s.icon}</div>
+          <div style="flex:1;min-width:0">
+            <div class="dep-dest">${s.name}</div>
+            <div class="dep-stop">Nærmeste: ${s.closest}m unna</div>
+          </div>
+          <div class="dep-right">
+            <div style="font-size:14px;font-weight:700;color:var(--success)">${s.count} tilgjengelig</div>
+          </div>
+        </div>`).join(""):"";
     const bikeHtml=bikes.length?`
       <div class="slabel" style="margin-top:18px">Bysykkel</div>`+
       bikes.map(b=>`
@@ -557,7 +595,7 @@ function renderContent(){
         <div style="flex:1;min-width:0"><div class="dep-dest">${dep.dest||"–"}</div><div class="dep-stop">${dep.stop}${dep.dist?` · ${dep.dist}m`:""}</div></div>
         <div class="dep-right"><div class="dep-mins">${m}</div><div class="dep-clock">${fmt(dep.time)}</div></div>
       </div>`;
-    }).join("")+bikeHtml;
+    }).join("")+bikeHtml+scooterHtml;
   } else if(curTab==="mat"){
     if(!loc){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter posisjon…</div></div>`);return;}
     if(!restaurants.length){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter restauranter…</div></div>`);return;}
