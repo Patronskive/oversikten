@@ -206,24 +206,30 @@ async function fetchBikes(){
 async function fetchScooters(){
   if(!loc)return;
   try{
-    // Entur Shared Mobility - get all operators near location
-    const url=`https://api.entur.io/mobility/v2/gbfs/vehicles?lat=${loc.lat}&lon=${loc.lon}&range=500&count=50`;
-    const r=await fetchWithTimeout(url,{headers:{"ET-Client-Name":"johansguide-app","Accept":"application/json"}},6000);
+    const q=`{
+      vehicles(lat:${loc.lat},lon:${loc.lon},range:500,count:50,includeReserved:false,includeDisabled:false){
+        id lat lon system{name} vehicleType{formFactor}
+      }
+    }`;
+    const r=await fetchWithTimeout("https://api.entur.io/mobility/v2/graphql",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","ET-Client-Name":"johansguide-app"},
+      body:JSON.stringify({query:q})
+    },6000);
     const data=await r.json();
-    const vehicles=data.vehicles||[];
-    
-    // Group by operator and count
+    const vehicles=data.data?.vehicles||[];
     const ops={};
     vehicles.forEach(v=>{
-      const op=v.system?.name||v.system_id||"Ukjent";
-      const icon=v.form_factor==="bicycle"?"🚲":v.form_factor==="moped"?"🛵":"🛴";
+      const op=v.system?.name||"Ukjent";
+      const form=v.vehicleType?.formFactor||"";
+      const icon=form==="BICYCLE"?"🚲":form==="MOPED"?"🛵":"🛴";
       if(!ops[op])ops[op]={name:op,icon,count:0,closest:9999};
       ops[op].count++;
       const d=Math.round(calcDist(loc.lat,loc.lon,v.lat,v.lon));
       if(d<ops[op].closest)ops[op].closest=d;
     });
-    
     scooters=Object.values(ops).sort((a,b)=>a.closest-b.closest);
+    if(curTab==="avg")renderContent();
   }catch(e){console.error("Scooters error",e);}
 }
 function wi(s){if(!s)return"🌤️";const k=Object.keys(WI).find(k=>s.toLowerCase().includes(k));return k?WI[k]:"🌤️";}
