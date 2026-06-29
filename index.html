@@ -207,8 +207,11 @@ async function fetchScooters(){
   if(!loc)return;
   try{
     const q=`{
-      vehicles(lat:${loc.lat},lon:${loc.lon},range:500,count:50,includeReserved:false,includeDisabled:false){
-        id lat lon system{name} vehicleType{formFactor}
+      vehicles(latitude:${loc.lat},longitude:${loc.lon},radius:500){
+        id lat lon
+        currentFuelPercent
+        vehicleType{formFactor propulsionType}
+        system{name}
       }
     }`;
     const r=await fetchWithTimeout("https://api.entur.io/mobility/v2/graphql",{
@@ -217,6 +220,7 @@ async function fetchScooters(){
       body:JSON.stringify({query:q})
     },6000);
     const data=await r.json();
+    if(data.errors){console.error("Scooter GraphQL errors:",JSON.stringify(data.errors));return;}
     const vehicles=data.data?.vehicles||[];
     const ops={};
     vehicles.forEach(v=>{
