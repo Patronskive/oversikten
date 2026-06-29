@@ -121,6 +121,10 @@
   .errcard .etitle { color: var(--danger); font-weight: 700; margin-bottom: 6px; }
   .errcard .ebody { font-size: 13px; color: var(--muted); line-height: 1.5; }
 
+  .radius-bar{display:flex;gap:6px;margin-bottom:12px;align-items:center}
+  .radius-btn{background:var(--surface);border:0.5px solid var(--border);border-radius:8px;color:var(--muted);cursor:pointer;font-size:12px;font-weight:600;padding:6px 12px;transition:all .15s}
+  .radius-btn.active-radius{background:var(--accent-dim);border-color:var(--accent-border);color:var(--accent)}
+  .radius-label{font-size:11px;color:var(--muted);margin-right:4px}
   /* BOTTOM BAR */
   .bottom-bar { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px; padding: 10px 18px 18px; background: linear-gradient(0deg, var(--bg) 60%, transparent); display: flex; justify-content: space-between; align-items: center; z-index: 25; pointer-events: none; }
   .loc-label { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 5px; pointer-events: all; }
@@ -152,10 +156,10 @@
 </div>
 
 <div class="tabs">
-  <button class="tab active" onclick="setTab('avg')" id="tab-avg"><i class="ti ti-bus ti"></i>Avganger</button>
+  <button class="tab active" onclick="setTab('kollektiv')" id="tab-kollektiv"><i class="ti ti-bus ti"></i>Kollektiv</button>
+  <button class="tab" onclick="setTab('mikro')" id="tab-mikro"><i class="ti ti-scooter ti"></i>Mikro</button>
   <button class="tab" onclick="setTab('mat')" id="tab-mat"><i class="ti ti-tools-kitchen-2 ti"></i>Spise</button>
   <button class="tab" onclick="setTab('utforsk')" id="tab-utforsk"><i class="ti ti-compass ti"></i>Utforsk</button>
-  <button class="tab" onclick="setTab('stopp')" id="tab-stopp"><i class="ti ti-map-pin ti"></i>Stopp</button>
 </div>
 
 <div class="content" id="content">
@@ -226,7 +230,7 @@ async function fetchScooters(){
     vehicles.forEach(v=>{
       const op=v.system?.name?.translation?.[0]?.value||"Ukjent";
       const form=v.vehicleType?.formFactor||"";
-      const icon=form==="BICYCLE"?"🚲":form==="MOPED"?"🛵":"🛴";
+      const icon=form==="BICYCLE"?"🚲":form==="MOPED"?"🛵":form==="CARGO_BICYCLE"?"🚲":"🛴";
       if(!ops[op])ops[op]={name:op,icon,count:0,closest:9999};
       ops[op].count++;
       const d=Math.round(calcDist(loc.lat,loc.lon,v.lat,v.lon));
@@ -262,7 +266,7 @@ function todayHours(hours){
   return line.replace(today+": ","");
 }
 
-let loc=null, weather=null, departures=[], stops=[], restaurants=[], attractions=[], bikes=[], scooters=[], curTab="avg";
+let loc=null, weather=null, departures=[], stops=[], restaurants=[], attractions=[], bikes=[], scooters=[], curTab="kollektiv", transitRadius=300;
 let fetchingAttractions=false;
 let attractionsFetched=false;
 
@@ -312,7 +316,7 @@ async function fetchWeather(){
 
 async function fetchTransit(){
   if(!loc)return;
-  const pad=0.02;
+  const pad=transitRadius===300?0.008:transitRadius===500?0.012:transitRadius===1000?0.018:0.03;
   const minLat=loc.lat-pad, maxLat=loc.lat+pad, minLon=loc.lon-pad, maxLon=loc.lon+pad;
   const q=`{stopPlacesByBbox(minimumLatitude:${minLat},maximumLatitude:${maxLat},minimumLongitude:${minLon},maximumLongitude:${maxLon}){id name latitude longitude estimatedCalls(timeRange:3600,numberOfDepartures:10){expectedDepartureTime destinationDisplay{frontText}serviceJourney{line{publicCode transportMode}}realtime}}}`;
   try{
@@ -330,9 +334,11 @@ async function fetchTransit(){
       mode:c.serviceJourney?.line?.transportMode
     })));
     all.sort((a,b)=>new Date(a.time)-new Date(b.time));
-    const nearest3=raw.slice(0,3);
-    departures=all.filter(d=>nearest3.some(s=>s.name===d.stop)).slice(0,30);
-    stops=nearest3;
+    const maxStops=transitRadius<=300?3:transitRadius<=500?5:8;
+    const filteredStops=raw.filter(s=>s.dist<=transitRadius);
+    const nearest=filteredStops.length?filteredStops.slice(0,maxStops):raw.slice(0,3);
+    departures=all.filter(d=>nearest.some(s=>s.name===d.stop)).slice(0,40);
+    stops=nearest;
     if(curTab==="avg"||curTab==="stopp")renderContent();
   }catch(e){
     console.error("Transit error",e);
@@ -565,16 +571,31 @@ function setTab(t){
   else renderContent();
 }
 
+function setRadius(r){
+  transitRadius=r;
+  departures=[];stops=[];
+  document.querySelectorAll(".radius-btn").forEach(el=>el.classList.remove("active-radius"));
+  document.getElementById("radius-"+r).classList.add("active-radius");
+  fetchTransit();
+}
+
 function renderContent(){
   const c=document.getElementById("content");
-  if(curTab==="avg"){
+  if(curTab==="kollektiv"){
     if(!loc){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter posisjon…</div></div>`);return;}
-    if(!departures.length){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter avganger…</div></div>`);return;}
+    const radiusBar=`<div class="radius-bar">
+      <span class="radius-label">Radius:</span>
+      <button class="radius-btn${transitRadius===300?" active-radius":""}" id="radius-300" onclick="setRadius(300)">300m</button>
+      <button class="radius-btn${transitRadius===500?" active-radius":""}" id="radius-500" onclick="setRadius(500)">500m</button>
+      <button class="radius-btn${transitRadius===1000?" active-radius":""}" id="radius-1000" onclick="setRadius(1000)">1 km</button>
+      <button class="radius-btn${transitRadius===2000?" active-radius":""}" id="radius-2000" onclick="setRadius(2000)">2 km</button>
+    </div>`;
+    if(!departures.length){setContent(radiusBar+`<div class="spinner"><span class="sicon">⟳</span><div>Henter avganger…</div></div>`);return;}
     const scooterHtml=scooters.length?`
       <div class="slabel" style="margin-top:18px">Sparkesykler i nærheten</div>`+
       scooters.map(s=>`
         <div class="dep">
-          <div class="lbadge" style="font-size:18px">${s.icon}</div>
+          <div class="lbadge" style="font-size:18px">${s.icon||"🛴"}</div>
           <div style="flex:1;min-width:0">
             <div class="dep-dest">${s.name}</div>
             <div class="dep-stop">Nærmeste: ${s.closest}m unna</div>
@@ -597,7 +618,7 @@ function renderContent(){
             <div class="dep-clock">${b.docks} lås</div>
           </div>
         </div>`).join(""):"";
-    c.innerHTML=`<div class="slabel">Neste avganger</div>`+departures.map(dep=>{
+    c.innerHTML=radiusBar+`<div class="slabel">Neste avganger</div>`+departures.map(dep=>{
       const m=minsUntil(dep.time);
       const soon=m==="nå"||(typeof m==="string"&&parseInt(m)<=3);
       return `<div class="dep${soon?" soon":""}">
@@ -605,7 +626,7 @@ function renderContent(){
         <div style="flex:1;min-width:0"><div class="dep-dest">${dep.dest||"–"}</div><div class="dep-stop">${dep.stop}${dep.dist?` · ${dep.dist}m`:""}</div></div>
         <div class="dep-right"><div class="dep-mins">${m}</div><div class="dep-clock">${fmt(dep.time)}</div></div>
       </div>`;
-    }).join("")+bikeHtml+scooterHtml;
+    }).join("");
   } else if(curTab==="mat"){
     if(!loc){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter posisjon…</div></div>`);return;}
     if(!restaurants.length){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter restauranter…</div></div>`);return;}
@@ -644,25 +665,42 @@ function renderContent(){
         </div>
       </div>`;
     }).join("");
-  } else if(curTab==="stopp"){
-    if(!stops.length){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter holdeplasser…</div></div>`);return;}
-    c.innerHTML=`<div class="slabel">Holdeplasser i nærheten</div>`+stops.map(s=>`
-      <div class="stopcard">
-        <div class="stopcard-name"><div class="stop-dot">📍</div><a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.name+' holdeplass')}" target="_blank" style="color:var(--text);text-decoration:none">${s.name} <i class="ti ti-external-link" style="font-size:13px;color:var(--muted);vertical-align:middle"></i></a>${s.dist?`<span style="font-size:11px;font-weight:400;color:var(--muted);margin-left:auto">${s.dist}m</span>`:""}</div>
-        ${(s.estimatedCalls||[]).slice(0,5).map(call=>`
-          <div class="minidep">
-            <span class="minibadge">${mi(call.serviceJourney?.line?.transportMode)}${call.serviceJourney?.line?.publicCode}</span>
-            <span class="minidest">${call.destinationDisplay?.frontText||"–"}</span>
-            <span class="minitime">${minsUntil(call.expectedDepartureTime)}</span>
-          </div>`).join("")}
-      </div>`).join("");
-  }
-}
+  } else if(curTab==="mikro"){
+    if(!loc){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter posisjon…</div></div>`);return;}
+    let html="";
+    // Bysykkel
+    if(bikes.length){
+      html+=`<div class="slabel">Bysykkel</div>`;
+      html+=bikes.map(b=>`
+        <div class="dep">
+          <div class="lbadge" style="font-size:18px">🚲</div>
+          <div style="flex:1;min-width:0">
+            <div class="dep-dest">${b.name}</div>
+            <div class="dep-stop">${b.dist}m unna</div>
+          </div>
+          <div class="dep-right">
+            <div style="font-size:14px;font-weight:700;color:${b.bikes>0?"var(--success)":"var(--danger)"}">${b.bikes} ledig</div>
+            <div class="dep-clock">${b.docks} lås</div>
+          </div>
+        </div>`).join("");
+    }
+    // Sparkesykler
+    if(scooters.length){
+      html+=`<div class="slabel" style="margin-top:${bikes.length?18:0}px">Sparkesykler</div>`;
+      html+=scooters.map(s=>`
+        <div class="dep">
+          <div class="lbadge" style="font-size:18px">${s.icon||"🛴"}</div>
+          <div style="flex:1;min-width:0">
+            <div class="dep-dest">${s.name}</div>
+            <div class="dep-stop">Nærmeste: ${s.closest}m unna</div>
+          </div>
+          <div class="dep-right">
+            <div style="font-size:14px;font-weight:700;color:var(--success)">${s.count} tilgjengelig</div>
+          </div>
+        </div>`).join("");
+    }
+    if(!bikes.length&&!scooters.length){
+      html=`<div class="empty"><div class="eicon">🛴</div><div>Ingen mikromobilitet funnet i nærheten</div></div>`;
+    }
+    c.innerHTML=html;
 
-// Auto-refresh departures every 30s
-setInterval(()=>{if(loc&&(curTab==="avg"||curTab==="stopp"))fetchTransit();},30000);
-
-initLoc();
-</script>
-</body>
-</html>
