@@ -232,24 +232,49 @@ async function fetchBikes(){
 async function fetchScooters(){
   if(!loc)return;
   try{
-    const q=`{vehicles(lat:${loc.lat},lon:${loc.lon},range:1000,count:100,includeReserved:false,includeDisabled:false){id lat lon vehicleType{formFactor}system{name{translation{value}}}}}`;
-    const r=await fetchWithTimeout("https://api.entur.io/mobility/v2/graphql",{method:"POST",headers:{"Content-Type":"application/json","ET-Client-Name":"johansguide-app"},body:JSON.stringify({query:q})},6000);
+    const q=`{vehicles(lat:${loc.lat},lon:${loc.lon},range:1000,count:100,includeReserved:false,includeDisabled:false){id lat lon currentFuelPercent vehicleType{formFactor}system{name{translation{value}}}}}`;
+    const r=await fetchWithTimeout("https://api.entur.io/mobility/v2/graphql",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","ET-Client-Name":"johansguide-app"},
+      body:JSON.stringify({query:q})
+    },6000);
     const data=await r.json();
     if(data.errors){console.error("Scooter errors",data.errors);return;}
-    console.log("Scooter vehicles found:",data.data?.vehicles?.length,"operators:",[...new Set((data.data?.vehicles||[]).map(v=>v.system?.name?.translation?.[0]?.value))]);
+    const nameMap={"Ryde_Oslo":"Ryde","Bolt Technology OÜ":"Bolt","Bolt Technology":"Bolt","VOI":"Voi","Tier Mobility":"Tier","Dott":"Dott"};
     const ops={};
     (data.data?.vehicles||[]).forEach(v=>{
-      const op=v.system?.name?.translation?.[0]?.value||"Ukjent";
+      const rawName=v.system?.name?.translation?.[0]?.value||"Ukjent";
+      const op=nameMap[rawName]||rawName.replace(/_/g," ").trim();
       const form=v.vehicleType?.formFactor||"";
       const icon=form==="BICYCLE"||form==="CARGO_BICYCLE"?"🚲":form==="MOPED"?"🛵":"🛴";
-      if(!ops[op])ops[op]={name:op,icon,count:0,closest:9999};
-      ops[op].count++;
       const d=Math.round(calcDist(loc.lat,loc.lon,v.lat,v.lon));
+      if(!ops[op])ops[op]={name:op,icon,count:0,closest:9999,vehicles:[]};
+      ops[op].count++;
       if(d<ops[op].closest)ops[op].closest=d;
+      ops[op].vehicles.push({lat:v.lat,lon:v.lon,dist:d,battery:v.currentFuelPercent!=null?Math.round(v.currentFuelPercent):null,icon});
     });
+    Object.values(ops).forEach(op=>op.vehicles.sort((a,b)=>a.dist-b.dist));
     scooters=Object.values(ops).sort((a,b)=>a.closest-b.closest);
     if(curTab==="mikro")renderContent();
   }catch(e){console.error("Scooters error",e);}
+}
+
+let expandedOp=null, showMapOp=null;
+function toggleOp(name){expandedOp=expandedOp===name?null:name;showMapOp=null;renderContent();}
+function toggleMap(name){
+  showMapOp=showMapOp===name?null:name;
+  renderContent();
+  if(showMapOp){setTimeout(()=>initOpMap(name),100);}
+}
+function initOpMap(name){
+  const op=scooters.find(s=>s.name===name);
+  if(!op||!op.vehicles.length)return;
+  const mapId="map-"+name.replace(/[^a-z0-9]/gi,"-");
+  const el=document.getElementById(mapId);
+  if(!el)return;
+  const center=op.vehicles[0];
+  const markers=op.vehicles.slice(0,15).map(v=>`&markers=color:red%7C${v.lat},${v.lon}`).join("");
+  el.innerHTML=`<iframe width="100%" height="260" style="border:0;border-radius:10px" loading="lazy" src="https://www.google.com/maps/embed/v1/view?key=AIzaSyAg9DDMoznsaUQAHKZ7toQ6HR7XhhEunmI&center=${center.lat},${center.lon}&zoom=15&maptype=roadmap"></iframe>`;
 }
 
 async function fetchRestaurants(){
@@ -392,7 +417,46 @@ function renderContent(){
     }
     if(scooters.length){
       html+=`<div class="slabel" style="margin-top:${bikes.length?16:0}px">Sparkesykler</div>`;
-      html+=scooters.map(s=>`<div class="dep"><div class="lbadge" style="font-size:18px">${s.icon||"🛴"}</div><div style="flex:1;min-width:0"><div class="dep-dest">${s.name}</div><div class="dep-stop">Nærmeste: ${s.closest}m</div></div><div class="dep-right"><div class="dep-mins" style="color:var(--success)">${s.count}</div><div class="dep-clock">tilgjengelig</div></div></div>`).join("");
+      html+=scooters.map(s=>{
+        const isExp=expandedOp===s.name;
+        const isMap=showMapOp===s.name;
+        const mapId="map-"+s.name.replace(/\s/g,"-");
+        let card=`<div class="stopcard" style="margin-bottom:10px">
+          <div style="display:flex;align-items:center;gap:11px;cursor:pointer" onclick="toggleOp('${s.name}')">
+            <div class="lbadge" style="font-size:18px">${s.icon||"🛴"}</div>
+            <div style="flex:1;min-width:0">
+              <div class="dep-dest">${s.name}</div>
+              <div class="dep-stop">Nærmeste: ${s.closest}m</div>
+            </div>
+            <div style="text-align:right;flex-shrink:0">
+              <div style="font-size:15px;font-weight:800;color:var(--success)">${s.count}</div>
+              <div style="font-size:11px;color:var(--muted)">tilgjengelig</div>
+            </div>
+            <div style="font-size:18px;color:var(--muted);margin-left:4px">${isExp?"▲":"▼"}</div>
+          </div>`;
+        if(isExp){
+          card+=`<div style="margin-top:12px;display:flex;gap:8px;margin-bottom:10px">
+            <button onclick="toggleMap('${s.name}')" style="flex:1;background:${isMap?"var(--accent-dim)":"var(--surface2)"};border:1px solid ${isMap?"var(--accent-border)":"var(--border2)"};border-radius:8px;color:${isMap?"var(--accent)":"var(--muted)"};cursor:pointer;font-size:12px;font-weight:600;padding:7px">🗺️ Kart</button>
+          </div>`;
+          if(isMap){
+            card+=`<div id="${mapId}" style="margin-bottom:12px"><div style="text-align:center;padding:20px;color:var(--muted)">Laster kart…</div></div>`;
+          }
+          card+=`<div style="display:flex;flex-direction:column;gap:6px">`;
+          s.vehicles.slice(0,8).forEach(v=>{
+            const battColor=v.battery==null?"var(--muted)":v.battery>=60?"var(--success)":v.battery>=30?"var(--warn)":"var(--danger)";
+            const battText=v.battery!=null?`🔋 ${v.battery}%`:"🔋 –";
+            card+=`<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg);border-radius:9px">
+              <span style="font-size:18px">${v.icon||"🛴"}</span>
+              <span style="flex:1;font-size:13px;color:var(--text)">${v.dist}m unna</span>
+              <span style="font-size:12px;font-weight:700;color:${battColor}">${battText}</span>
+              <a href="https://www.google.com/maps/dir/?api=1&destination=${v.lat},${v.lon}" target="_blank" style="font-size:12px;color:var(--accent);text-decoration:none">Gå dit</a>
+            </div>`;
+          });
+          card+=`</div>`;
+        }
+        card+=`</div>`;
+        return card;
+      }).join("");
     }
     if(!bikes.length&&!scooters.length) html=`<div class="empty"><div class="eicon">🛴</div><div>Ingen mikromobilitet funnet</div></div>`;
     c.innerHTML=html;
