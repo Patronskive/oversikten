@@ -278,7 +278,7 @@ async function fetchWeather(){
 
 async function fetchTransit(){
   if(!loc)return;
-  const pad=0.008;
+  const pad=0.02;
   const minLat=loc.lat-pad, maxLat=loc.lat+pad, minLon=loc.lon-pad, maxLon=loc.lon+pad;
   const q=`{stopPlacesByBbox(minimumLatitude:${minLat},maximumLatitude:${maxLat},minimumLongitude:${minLon},maximumLongitude:${maxLon}){id name latitude longitude estimatedCalls(timeRange:3600,numberOfDepartures:10){expectedDepartureTime destinationDisplay{frontText}serviceJourney{line{publicCode transportMode}}realtime}}}`;
   try{
@@ -296,8 +296,9 @@ async function fetchTransit(){
       mode:c.serviceJourney?.line?.transportMode
     })));
     all.sort((a,b)=>new Date(a.time)-new Date(b.time));
-    departures=all.filter(d=>!d.dist||d.dist<=300).slice(0,30);
-    stops=raw.filter(s=>!s.dist||s.dist<=300).slice(0,6);
+    const nearest3=raw.slice(0,3);
+    departures=all.filter(d=>nearest3.some(s=>s.name===d.stop)).slice(0,30);
+    stops=nearest3;
     if(curTab==="avg"||curTab==="stopp")renderContent();
   }catch(e){
     console.error("Transit error",e);
