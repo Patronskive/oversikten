@@ -251,7 +251,8 @@ async function fetchScooters(){
       if(!ops[op])ops[op]={name:op,icon,count:0,closest:9999,vehicles:[]};
       ops[op].count++;
       if(d<ops[op].closest)ops[op].closest=d;
-      ops[op].vehicles.push({lat:v.lat,lon:v.lon,dist:d,battery:v.currentFuelPercent!=null?Math.round(v.currentFuelPercent):null,icon});
+      const bat=v.currentFuelPercent!=null?(v.currentFuelPercent<=1?Math.round(v.currentFuelPercent*100):Math.round(v.currentFuelPercent)):null;
+      ops[op].vehicles.push({lat:v.lat,lon:v.lon,dist:d,battery:bat,icon});
     });
     Object.values(ops).forEach(op=>op.vehicles.sort((a,b)=>a.dist-b.dist));
     scooters=Object.values(ops).sort((a,b)=>a.closest-b.closest);
@@ -274,7 +275,13 @@ function initOpMap(name){
   if(!el)return;
   const center=op.vehicles[0];
   const markers=op.vehicles.slice(0,15).map(v=>`&markers=color:red%7C${v.lat},${v.lon}`).join("");
-  el.innerHTML=`<iframe width="100%" height="260" style="border:0;border-radius:10px" loading="lazy" src="https://www.google.com/maps/embed/v1/view?key=AIzaSyAg9DDMoznsaUQAHKZ7toQ6HR7XhhEunmI&center=${center.lat},${center.lon}&zoom=15&maptype=roadmap"></iframe>`;
+  const bbox=0.003;
+  const minLon=(center.lon-bbox).toFixed(5),minLat=(center.lat-bbox).toFixed(5),maxLon=(+center.lon+bbox).toFixed(5),maxLat=(+center.lat+bbox).toFixed(5);
+  const markers=op.vehicles.slice(0,15).map(v=>`${v.lon},${v.lat}`).join("|");
+  el.innerHTML=`<iframe width="100%" height="260" style="border:0;border-radius:10px" loading="lazy" src="https://www.openstreetmap.org/export/embed.html?bbox=${minLon},${minLat},${maxLon},${maxLat}&layer=mapnik&marker=${center.lat},${center.lon}"></iframe>
+  <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px">
+    ${op.vehicles.slice(0,8).map(v=>`<a href="https://www.google.com/maps/dir/?api=1&destination=${v.lat},${v.lon}" target="_blank" style="background:var(--surface2);border:1px solid var(--border2);border-radius:7px;padding:4px 10px;font-size:11px;color:var(--accent);text-decoration:none">${v.icon||"🛴"} ${v.dist}m${v.battery!=null?" · "+v.battery+"%":""}</a>`).join("")}
+  </div>`;
 }
 
 async function fetchRestaurants(){
