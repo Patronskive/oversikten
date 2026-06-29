@@ -232,10 +232,11 @@ async function fetchBikes(){
 async function fetchScooters(){
   if(!loc)return;
   try{
-    const q=`{vehicles(lat:${loc.lat},lon:${loc.lon},range:500,count:50,includeReserved:false,includeDisabled:false){id lat lon vehicleType{formFactor}system{name{translation{value}}}}}`;
+    const q=`{vehicles(lat:${loc.lat},lon:${loc.lon},range:1000,count:100,includeReserved:false,includeDisabled:false){id lat lon vehicleType{formFactor}system{name{translation{value}}}}}`;
     const r=await fetchWithTimeout("https://api.entur.io/mobility/v2/graphql",{method:"POST",headers:{"Content-Type":"application/json","ET-Client-Name":"johansguide-app"},body:JSON.stringify({query:q})},6000);
     const data=await r.json();
     if(data.errors){console.error("Scooter errors",data.errors);return;}
+    console.log("Scooter vehicles found:",data.data?.vehicles?.length,"operators:",[...new Set((data.data?.vehicles||[]).map(v=>v.system?.name?.translation?.[0]?.value))]);
     const ops={};
     (data.data?.vehicles||[]).forEach(v=>{
       const op=v.system?.name?.translation?.[0]?.value||"Ukjent";
