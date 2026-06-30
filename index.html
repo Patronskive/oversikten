@@ -106,6 +106,7 @@ body{display:flex;flex-direction:column;max-width:480px;margin:0 auto;min-height
   <button class="tab" onclick="setTab('mikro')" id="tab-mikro"><i class="ti ti-scooter"></i>Mikro</button>
   <button class="tab" onclick="setTab('mat')" id="tab-mat"><i class="ti ti-tools-kitchen-2"></i>Spise</button>
   <button class="tab" onclick="setTab('utforsk')" id="tab-utforsk"><i class="ti ti-compass"></i>Utforsk</button>
+  <button class="tab" onclick="setTab('handel')" id="tab-handel"><i class="ti ti-shopping-cart"></i>Handel</button>
 </div>
 <div class="content" id="content">
   <div class="spinner"><span class="sicon">⟳</span><div>Henter posisjon…</div></div>
@@ -123,9 +124,10 @@ const MI={bus:"🚌",tram:"🚊",rail:"🚆",metro:"🚇",water:"⛴️",ferry:"
 // ── State ──────────────────────────────────────────────────
 let loc=null, weather=null;
 let departures=[], stops=[], bikes=[], scooters=[];
-let restaurants=[], attractions=[];
+let restaurants=[], attractions=[], shops=[];
 let fetchingRestaurants=false, restaurantsFetched=false;
 let fetchingAttractions=false, attractionsFetched=false;
+let fetchingShops=false, shopsFetched=false;
 let curTab="kollektiv", transitRadius=300;
 
 // ── Helpers ────────────────────────────────────────────────
@@ -332,12 +334,35 @@ async function fetchAttractions(){
   finally{fetchingAttractions=false;}
 }
 
+async function fetchShops(){
+  if(!loc||fetchingShops||shopsFetched)return;
+  fetchingShops=true;
+  try{
+    const r=await fetchWithTimeout("https://places.googleapis.com/v1/places:searchNearby",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","X-Goog-Api-Key":"AIzaSyAg9DDMoznsaUQAHKZ7toQ6HR7XhhEunmI","X-Goog-FieldMask":"places.displayName,places.rating,places.userRatingCount,places.formattedAddress,places.location,places.primaryTypeDisplayName,places.currentOpeningHours"},
+      body:JSON.stringify({includedTypes:["grocery_store","supermarket","convenience_store","pharmacy","drugstore"],maxResultCount:15,rankPreference:"DISTANCE",locationRestriction:{circle:{center:{latitude:loc.lat,longitude:loc.lon},radius:1000}}})
+    },8000);
+    const data=await r.json();
+    if(data.error)throw new Error(data.error.message);
+    shops=(data.places||[]).map(p=>({
+      name:p.displayName?.text||"",type:p.primaryTypeDisplayName?.text||"",
+      rating:p.rating||null,ratingCount:p.userRatingCount||null,
+      open:p.currentOpeningHours?.openNow??null,address:p.formattedAddress||"",
+      dist:Math.round(calcDist(loc.lat,loc.lon,p.location?.latitude||0,p.location?.longitude||0)),
+    })).sort((a,b)=>a.dist-b.dist);
+    shopsFetched=true;
+    if(curTab==="handel")renderContent();
+  }catch(e){console.error("Shops error",e);if(curTab==="handel")setContent(`<div class="errcard"><div class="etitle">Feil</div><div class="ebody">${e.message}</div></div>`);}
+  finally{fetchingShops=false;}
+}
+
 // ── Orchestration ──────────────────────────────────────────
 function fetchAll(){
   setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter data…</div></div>`);
   weather=null;departures=[];stops=[];bikes=[];scooters=[];
-  restaurants=[];attractions=[];
-  restaurantsFetched=false;attractionsFetched=false;
+  restaurants=[];attractions=[];shops=[];
+  restaurantsFetched=false;attractionsFetched=false;shopsFetched=false;
   fetchWeather();fetchTransit();fetchBikes();fetchScooters();
 }
 
@@ -351,6 +376,7 @@ function setTab(t){
   document.getElementById("tab-"+t).classList.add("active");
   if(t==="mat"&&!restaurantsFetched&&!fetchingRestaurants&&loc)fetchRestaurants();
   else if(t==="utforsk"&&!attractionsFetched&&!fetchingAttractions&&loc)fetchAttractions();
+  else if(t==="handel"&&!shopsFetched&&!fetchingShops&&loc)fetchShops();
   else renderContent();
 }
 
@@ -486,6 +512,15 @@ function renderContent(){
       const stars=r.rating?`<span style="color:#fbbf24">★</span> <strong>${r.rating.toFixed(1)}</strong> <span style="color:var(--muted);font-size:11px">(${r.ratingCount?.toLocaleString("no-NO")||0})</span>`:"";
       const ob=r.open===true?`<span class="open">Åpent nå</span>`:r.open===false?`<span class="closed">Stengt</span>`:"";
       return `<div class="rcard"><div class="rcard-body"><div class="rcard-top"><a class="rcard-name" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.name+' '+r.address)}" target="_blank" style="color:var(--text);text-decoration:none">${r.name} <i class="ti ti-external-link" style="font-size:12px;color:var(--muted)"></i></a><div style="font-size:11px;color:var(--muted)">📍 ${r.dist}m</div></div>${r.type?`<div class="rcard-type">${r.type}</div>`:""}${stars?`<div style="font-size:13px;margin:4px 0">${stars}</div>`:""}${ob?`<div class="rcard-hours">${ob}</div>`:""}</div></div>`;
+    }).join("");
+  } else if(curTab==="handel"){
+    if(!shopsFetched){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter butikker…</div></div>`);return;}
+    if(!shops.length){setContent(`<div class="empty"><div class="eicon">🛒</div><div>Ingen butikker funnet i nærheten</div></div>`);return;}
+    const typeIcon={"Grocery Store":"🛒","Supermarket":"🛒","Convenience Store":"🏪","Pharmacy":"💊","Drugstore":"💊"};
+    c.innerHTML=`<div class="slabel">Dagligvare, kiosk og apotek</div>`+shops.map(s=>{
+      const ob=s.open===true?`<span class="open">Åpent nå</span>`:s.open===false?`<span class="closed">Stengt</span>`:"";
+      const icon=typeIcon[s.type]||"🏪";
+      return `<div class="rcard"><div class="rcard-body"><div class="rcard-top"><a class="rcard-name" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.name+' '+s.address)}" target="_blank" style="color:var(--text);text-decoration:none">${icon} ${s.name} <i class="ti ti-external-link" style="font-size:12px;color:var(--muted)"></i></a><div style="font-size:11px;color:var(--muted)">📍 ${s.dist}m</div></div>${s.type?`<div class="rcard-type">${s.type}</div>`:""}${ob?`<div class="rcard-hours">${ob}</div>`:""}</div></div>`;
     }).join("");
   }
 }
