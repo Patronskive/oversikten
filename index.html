@@ -349,7 +349,10 @@ async function fetchShops(){
     shops=(data.places||[])
       .filter(p=>{
         const t=p.primaryTypeDisplayName?.text||"";
-        return !excludeTypes.includes(t);
+        if(excludeTypes.includes(t))return false;
+        // Pharmacies/drugstores without opening hours are likely not real walk-in locations
+        if((t==="Pharmacy"||t==="Drugstore")&&!p.currentOpeningHours)return false;
+        return true;
       })
       .map(p=>({
         name:p.displayName?.text||"",type:p.primaryTypeDisplayName?.text||"",
