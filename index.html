@@ -140,6 +140,10 @@ function calcDist(lat1,lon1,lat2,lon2){
   const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
   return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
+function isInNorway(lat,lon){
+  // Rough bounding box for Norway including Svalbard
+  return lat>=57.9&&lat<=81&&lon>=4.0&&lon<=31.5;
+}
 function setContent(html){document.getElementById("content").innerHTML=html;}
 function fetchWithTimeout(url,options={},ms=8000){
   const c=new AbortController();
@@ -190,6 +194,11 @@ async function fetchWeather(){
 
 async function fetchTransit(){
   if(!loc)return;
+  if(!isInNorway(loc.lat,loc.lon)){
+    stops=[];departures=[];
+    if(curTab==="kollektiv")renderContent();
+    return;
+  }
   const pad=transitRadius===300?0.008:transitRadius===500?0.012:transitRadius===1000?0.018:0.03;
   const q=`{stopPlacesByBbox(minimumLatitude:${loc.lat-pad},maximumLatitude:${loc.lat+pad},minimumLongitude:${loc.lon-pad},maximumLongitude:${loc.lon+pad}){id name latitude longitude estimatedCalls(timeRange:3600,numberOfDepartures:10){expectedDepartureTime destinationDisplay{frontText}serviceJourney{line{publicCode transportMode}}}}}`;
   try{
@@ -216,6 +225,7 @@ async function fetchTransit(){
 
 async function fetchBikes(){
   if(!loc)return;
+  if(!isInNorway(loc.lat,loc.lon)){bikes=[];return;}
   try{
     const [ir,sr]=await Promise.all([
       fetchWithTimeout("https://gbfs.urbansharing.com/oslobysykkel.no/station_information.json",{headers:{"Client-Identifier":"johansguide-app"}},6000),
@@ -233,6 +243,7 @@ async function fetchBikes(){
 
 async function fetchScooters(){
   if(!loc)return;
+  if(!isInNorway(loc.lat,loc.lon)){scooters=[];return;}
   try{
     const q=`{vehicles(lat:${loc.lat},lon:${loc.lon},range:1000,count:100,includeReserved:false,includeDisabled:false){id lat lon currentFuelPercent vehicleType{formFactor}system{name{translation{value}}}}}`;
     const r=await fetchWithTimeout("https://api.entur.io/mobility/v2/graphql",{
@@ -431,6 +442,10 @@ function renderContent(){
   const c=document.getElementById("content");
 
   if(curTab==="kollektiv"){
+    if(loc&&!isInNorway(loc.lat,loc.lon)){
+      setContent(`<div class="empty"><div class="eicon">🌍</div><div style="font-weight:700;margin-bottom:6px">Kollektivdata er foreløpig kun tilgjengelig i Norge</div><div style="font-size:13px">Du er utenfor dekningsområdet til Entur. Prøv Spise, Utforsk eller Handel i stedet — de fungerer globalt.</div></div>`);
+      return;
+    }
     const rbar=`<div class="radius-bar"><span class="radius-label">Radius:</span><button class="rbtn${transitRadius===300?" active":""}" onclick="setRadius(300)">300m</button><button class="rbtn${transitRadius===500?" active":""}" onclick="setRadius(500)">500m</button><button class="rbtn${transitRadius===1000?" active":""}" onclick="setRadius(1000)">1 km</button><button class="rbtn${transitRadius===2000?" active":""}" onclick="setRadius(2000)">2 km</button></div>`;
     if(!stops.length){setContent(rbar+`<div class="spinner"><span class="sicon">⟳</span><div>Henter avganger…</div></div>`);return;}
     c.innerHTML=rbar+stops.map(stop=>{
@@ -454,6 +469,10 @@ function renderContent(){
     }).join("");
 
     } else if(curTab==="mikro"){
+    if(loc&&!isInNorway(loc.lat,loc.lon)){
+      setContent(`<div class="empty"><div class="eicon">🌍</div><div style="font-weight:700;margin-bottom:6px">Bysykkel og sparkesykler er foreløpig kun tilgjengelig i Norge</div><div style="font-size:13px">Tjenestene vi bruker dekker bare Oslo og noen norske byer.</div></div>`);
+      return;
+    }
     let html="";
     if(bikes.length){
       html+=`<div class="slabel">Bysykkel</div>`;
