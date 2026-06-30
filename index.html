@@ -294,12 +294,15 @@ async function fetchRestaurants(){
     },8000);
     const data=await r.json();
     if(data.error)throw new Error(data.error.message);
-    restaurants=(data.places||[]).map(p=>({
-      name:p.displayName?.text||"",type:p.primaryTypeDisplayName?.text||"",
-      rating:p.rating||null,ratingCount:p.userRatingCount||null,price:p.priceLevel||null,
-      open:p.currentOpeningHours?.openNow??null,address:p.formattedAddress||"",
-      dist:Math.round(calcDist(loc.lat,loc.lon,p.location?.latitude||0,p.location?.longitude||0)),
-    }));
+    restaurants=(data.places||[])
+      .filter(p=>p.rating&&p.rating>=3.8&&p.userRatingCount>=5)
+      .map(p=>({
+        name:p.displayName?.text||"",type:p.primaryTypeDisplayName?.text||"",
+        rating:p.rating||null,ratingCount:p.userRatingCount||null,price:p.priceLevel||null,
+        open:p.currentOpeningHours?.openNow??null,address:p.formattedAddress||"",
+        dist:Math.round(calcDist(loc.lat,loc.lon,p.location?.latitude||0,p.location?.longitude||0)),
+      }))
+      .sort((a,b)=>a.dist-b.dist);
     restaurantsFetched=true;
     if(curTab==="mat")renderContent();
   }catch(e){console.error("Restaurant error",e);if(curTab==="mat")setContent(`<div class="errcard"><div class="etitle">Feil</div><div class="ebody">${e.message}</div></div>`);}
@@ -454,7 +457,7 @@ function renderContent(){
             card+=`<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg);border-radius:9px">
               <span style="font-size:18px">${v.icon||"🛴"}</span>
               <span style="flex:1;font-size:13px;color:var(--text)">${v.dist}m unna</span>
-              <span style="font-size:12px;font-weight:700;color:${battColor}">${battText}</span>
+              ${v.battery!=null?`<span style="font-size:12px;font-weight:700;color:${battColor}">${battText}</span>`:""}
               <a href="https://www.google.com/maps/dir/?api=1&destination=${v.lat},${v.lon}" target="_blank" style="font-size:12px;color:var(--accent);text-decoration:none">Gå dit</a>
             </div>`;
           });
