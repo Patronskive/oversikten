@@ -345,12 +345,18 @@ async function fetchShops(){
     },8000);
     const data=await r.json();
     if(data.error)throw new Error(data.error.message);
-    shops=(data.places||[]).map(p=>({
-      name:p.displayName?.text||"",type:p.primaryTypeDisplayName?.text||"",
-      rating:p.rating||null,ratingCount:p.userRatingCount||null,
-      open:p.currentOpeningHours?.openNow??null,address:p.formattedAddress||"",
-      dist:Math.round(calcDist(loc.lat,loc.lon,p.location?.latitude||0,p.location?.longitude||0)),
-    })).sort((a,b)=>a.dist-b.dist);
+    const excludeTypes=["Manufacturer","Wholesaler","Corporate Office","Distribution Service"];
+    shops=(data.places||[])
+      .filter(p=>{
+        const t=p.primaryTypeDisplayName?.text||"";
+        return !excludeTypes.includes(t);
+      })
+      .map(p=>({
+        name:p.displayName?.text||"",type:p.primaryTypeDisplayName?.text||"",
+        rating:p.rating||null,ratingCount:p.userRatingCount||null,
+        open:p.currentOpeningHours?.openNow??null,address:p.formattedAddress||"",
+        dist:Math.round(calcDist(loc.lat,loc.lon,p.location?.latitude||0,p.location?.longitude||0)),
+      })).sort((a,b)=>a.dist-b.dist);
     shopsFetched=true;
     if(curTab==="handel")renderContent();
   }catch(e){console.error("Shops error",e);if(curTab==="handel")setContent(`<div class="errcard"><div class="etitle">Feil</div><div class="ebody">${e.message}</div></div>`);}
@@ -517,11 +523,24 @@ function renderContent(){
     if(!shopsFetched){setContent(`<div class="spinner"><span class="sicon">⟳</span><div>Henter butikker…</div></div>`);return;}
     if(!shops.length){setContent(`<div class="empty"><div class="eicon">🛒</div><div>Ingen butikker funnet i nærheten</div></div>`);return;}
     const typeIcon={"Grocery Store":"🛒","Supermarket":"🛒","Convenience Store":"🏪","Pharmacy":"💊","Drugstore":"💊"};
-    c.innerHTML=`<div class="slabel">Dagligvare, kiosk og apotek</div>`+shops.map(s=>{
+    const groceryTypes=["Grocery Store","Supermarket"];
+    const pharmacyTypes=["Pharmacy","Drugstore"];
+    const kioskTypes=["Convenience Store"];
+    const grocery=shops.filter(s=>groceryTypes.includes(s.type));
+    const pharmacy=shops.filter(s=>pharmacyTypes.includes(s.type));
+    const kiosk=shops.filter(s=>kioskTypes.includes(s.type));
+    const other=shops.filter(s=>!groceryTypes.includes(s.type)&&!pharmacyTypes.includes(s.type)&&!kioskTypes.includes(s.type));
+    const renderShop=s=>{
       const ob=s.open===true?`<span class="open">Åpent nå</span>`:s.open===false?`<span class="closed">Stengt</span>`:"";
       const icon=typeIcon[s.type]||"🏪";
       return `<div class="rcard"><div class="rcard-body"><div class="rcard-top"><a class="rcard-name" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.name+' '+s.address)}" target="_blank" style="color:var(--text);text-decoration:none">${icon} ${s.name} <i class="ti ti-external-link" style="font-size:12px;color:var(--muted)"></i></a><div style="font-size:11px;color:var(--muted)">📍 ${s.dist}m</div></div>${s.type?`<div class="rcard-type">${s.type}</div>`:""}${ob?`<div class="rcard-hours">${ob}</div>`:""}</div></div>`;
-    }).join("");
+    };
+    let html="";
+    if(grocery.length){html+=`<div class="slabel">Dagligvare</div>`+grocery.map(renderShop).join("");}
+    if(kiosk.length){html+=`<div class="slabel" style="margin-top:16px">Kiosk</div>`+kiosk.map(renderShop).join("");}
+    if(pharmacy.length){html+=`<div class="slabel" style="margin-top:16px">Apotek</div>`+pharmacy.map(renderShop).join("");}
+    if(other.length){html+=`<div class="slabel" style="margin-top:16px">Annet</div>`+other.map(renderShop).join("");}
+    c.innerHTML=html;
   }
 }
 
