@@ -320,7 +320,7 @@ async function fetchAttractions(){
     },8000);
     const data=await r.json();
     if(data.error)throw new Error(data.error.message);
-    attractions=(data.places||[]).filter(p=>p.rating>=3.5).map(p=>({
+    attractions=(data.places||[]).filter(p=>p.rating>=3.5&&p.userRatingCount>=5).map(p=>({
       name:p.displayName?.text||"",type:p.primaryTypeDisplayName?.text||"",
       rating:p.rating||null,ratingCount:p.userRatingCount||null,
       open:p.currentOpeningHours?.openNow??null,address:p.formattedAddress||"",
