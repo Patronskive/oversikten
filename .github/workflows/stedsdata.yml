@@ -27,7 +27,7 @@ jobs:
         run: pip install -r requirements.txt
       - name: Kartlegg SSB-tabeller
         if: inputs.steg == 'alt' || inputs.steg == 'tabeller'
-        run: python ssb_tabeller.py >> "$GITHUB_STEP_SUMMARY"
+        run: python ssb_tabeller.py | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Befolkning på 250 m-rutenett
         if: inputs.steg == 'alt' || inputs.steg == 'rutenett'
         env:
