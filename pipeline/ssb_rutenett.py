@@ -1,6 +1,6 @@
 """Henter SSBs befolkning på 250 m-rutenett for kommunene i regionen og lagrer i Supabase.
 
-Kilde: SSBs WFS (https://ogc.ssb.no/wfs.ashx), NLOD-lisens.
+Kilde: SSBs WFS på kart.ssb.no, NLOD-lisens.
 Kommunegrenser: Kartverkets kommuneinfo-API.
 Krever miljøvariabelen SUPABASE_DB_URL (Postgres-tilkobling, session pooler).
 """
@@ -18,7 +18,12 @@ import requests
 from psycopg.types.json import Jsonb
 from shapely.geometry import MultiPolygon, shape
 
-WFS = "https://ogc.ssb.no/wfs.ashx"
+WFS_KANDIDATER = [
+    "https://kart.ssb.no/api/mapserver/v1/wfs/befolkning_paa_rutenett",
+    "https://kart.ssb.no/api/mapserver/v1/wfs/befolkning_pa_rutenett",
+    "https://ogc.ssb.no/wfs.ashx",
+]
+WFS = WFS_KANDIDATER[0]
 KOMMUNEINFO = "https://ws.geonorge.no/kommuneinfo/v1/kommuner/{nr}/omrade"
 UA = {"User-Agent": "stedsassistent/0.1 (privat prosjekt)"}
 SIDE = 10000
@@ -163,8 +168,20 @@ def main():
         kommuner = kommunepolygoner(nummer)
         bbox = tuple(kommuner.total_bounds)
 
-        cap = requests.get(WFS, params={"service": "WFS", "request": "GetCapabilities"}, headers=UA, timeout=120)
-        cap.raise_for_status()
+        global WFS
+        cap = None
+        for kandidat in WFS_KANDIDATER:
+            try:
+                r = requests.get(kandidat, params={"service": "WFS", "version": "2.0.0", "request": "GetCapabilities"}, headers=UA, timeout=120)
+                if r.ok and b"FeatureType" in r.content:
+                    WFS, cap = kandidat, r
+                    print(f"WFS-tjeneste: {kandidat}")
+                    break
+                print(f"Ingen lag fra {kandidat} (HTTP {r.status_code})")
+            except requests.RequestException as e:
+                print(f"Nådde ikke {kandidat}: {e.__class__.__name__}")
+        if cap is None:
+            sys.exit("Fant ingen fungerende WFS-tjeneste hos SSB.")
         aar_lag, lagnavn, tittel = velg_lag(cap.content)
 
         ruter = hent_ruter(lagnavn, bbox)
@@ -176,7 +193,7 @@ def main():
 
         id_kol = finn_kolonne(ruter.columns, [r"^ssbid", r"ru250", r"ruteid", r"^id$"], utelat=("gml_id",))
         pop_kol = finn_kolonne(ruter.columns, [r"pop_tot", r"bosatt", r"befolk", r"antall", r"^pop"])
-        aar_kol = finn_kolonne(ruter.columns, [r"^aar$", r"^year$", r"statistikkaar"])
+        aar_kol = finn_kolonne(ruter.columns, [r"^aar$", r"^year$", r"statistikk"])
         if not id_kol or not pop_kol:
             sys.exit(f"Fant ikke id- eller befolkningskolonne. Kolonner: {list(ruter.columns)}")
         print(f"Bruker id={id_kol}, befolkning={pop_kol}, år={aar_kol or tittel}")
