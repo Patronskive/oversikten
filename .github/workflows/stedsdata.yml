@@ -7,7 +7,7 @@ on:
         description: Hva skal kjøres
         type: choice
         default: alt
-        options: [alt, rutenett, grunnkretser, statistikk, osm, eksport, tabeller, meta]
+        options: [alt, rutenett, grunnkretser, statistikk, osm, reisetid, eksport, tabeller, meta]
 
 permissions:
   contents: write
@@ -15,7 +15,7 @@ permissions:
 jobs:
   hent:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 240
     defaults:
       run:
         working-directory: pipeline
@@ -28,6 +28,11 @@ jobs:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: pipeline/requirements.txt
+      - uses: actions/setup-java@v4
+        if: inputs.steg == 'alt' || inputs.steg == 'reisetid'
+        with:
+          distribution: temurin
+          java-version: "21"
       - name: Installer pakker
         run: pip install -r requirements.txt
       - name: Befolkning på 250 m-rutenett
@@ -47,6 +52,17 @@ jobs:
           osmium extract -b 9.9,58.7,12.6,60.55 norway.osm.pbf -o region.osm.pbf --overwrite
           rm norway.osm.pbf
           python osm_avstander.py region.osm.pbf
+      - name: Reisetid med kollektiv
+        if: inputs.steg == 'alt' || inputs.steg == 'reisetid'
+        run: |
+          if [ ! -f region.osm.pbf ]; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq osmium-tool
+            curl -sSfL -o norway.osm.pbf https://download.geofabrik.de/europe/norway-latest.osm.pbf
+            osmium extract -b 9.9,58.7,12.6,60.55 norway.osm.pbf -o region.osm.pbf --overwrite
+            rm norway.osm.pbf
+          fi
+          curl -sSfL -o gtfs.zip https://storage.googleapis.com/marduk-production/outbound/gtfs/rb_norway-aggregated-gtfs.zip
+          python reisetid.py region.osm.pbf gtfs.zip --max-memory 13G
       - name: Eksporter data til appen
         if: inputs.steg == 'alt' || inputs.steg == 'eksport'
         run: |
