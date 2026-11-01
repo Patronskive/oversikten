@@ -120,11 +120,43 @@ def finn_kolonne(kolonner, mønstre, utelat=()):
     return None
 
 
+def kandidat_urler(url):
+    """Direkte Supabase-adresser (db.<ref>.supabase.co) er bare IPv6; GitHub har ikke det.
+    Prøver da session pooler-adressene for regionen med samme passord."""
+    from urllib.parse import urlsplit, urlunsplit
+    deler = urlsplit(url)
+    vert = deler.hostname or ""
+    m = re.fullmatch(r"db\.([a-z0-9]+)\.supabase\.co", vert)
+    if not m:
+        return [url]
+    ref = m.group(1)
+    passord = deler.password or ""
+    region = os.environ.get("SUPABASE_REGION", "eu-north-1")
+    ut = []
+    for n in (0, 1):
+        netloc = f"postgres.{ref}:{passord}@aws-{n}-{region}.pooler.supabase.com:5432"
+        ut.append(urlunsplit((deler.scheme, netloc, deler.path or "/postgres", deler.query, "")))
+    return ut + [url]
+
+
+def koble_til(url):
+    siste = None
+    for u in kandidat_urler(url):
+        try:
+            conn = psycopg.connect(u, prepare_threshold=None, connect_timeout=15)
+            print(f"Koblet til {u.split('@')[-1]}")
+            return conn
+        except psycopg.OperationalError as e:
+            siste = e
+            print(f"Klarte ikke {u.split('@')[-1]}: {str(e).splitlines()[0]}")
+    raise siste
+
+
 def main():
     url = os.environ.get("SUPABASE_DB_URL")
     if not url:
         sys.exit("Mangler SUPABASE_DB_URL")
-    with psycopg.connect(url, prepare_threshold=None) as conn:
+    with koble_til(url) as conn:
         nummer = [r[0] for r in conn.execute("select kommunenr from kommune where i_region order by 1")]
         print(f"{len(nummer)} kommuner i regionen")
 
