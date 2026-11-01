@@ -1,4 +1,4 @@
-"""Henter grenser for grunnkretser og delområder i regionen fra Kartverkets WFS og lagrer dem i Supabase.
+"""Henter grenser for grunnkretser (og avleder delområder) i regionen fra Kartverkets WFS og lagrer dem i Supabase.
 
 Kilde: https://wfs.geonorge.no/skwms1/wfs.grunnkretser (CC BY 4.0, SSB/Kartverket).
 Tjenesten støtter ikke paging, så den spørres per kommune med kartutsnitt.
@@ -63,48 +63,26 @@ def main():
         nummer = [r[0] for r in conn.execute("select kommunenr from kommune where i_region order by 1")]
         kommuner = kommunepolygoner(nummer)
 
-        gk_deler, do_deler = [], []
+        gk_deler = []
         for _, k in kommuner.iterrows():
-            bbox = k.geometry.bounds
-            gk = hent_lag("app:Grunnkrets", bbox)
-            do = hent_lag("app:Delområde", bbox)
-            print(f"{k.kommunenr}: {len(gk)} grunnkretser, {len(do)} delområder i utsnittet")
+            gk = hent_lag("app:Grunnkrets", k.geometry.bounds)
+            print(f"{k.kommunenr}: {len(gk)} grunnkretser i utsnittet")
             gk_deler.append(gk)
-            do_deler.append(do)
 
         gk = pd.concat([d for d in gk_deler if not d.empty], ignore_index=True)
-        do = pd.concat([d for d in do_deler if not d.empty], ignore_index=True)
         print(f"Kolonner grunnkrets: {list(gk.columns)}")
-        print(f"Kolonner delområde: {list(do.columns)}")
 
         gk_nr = finn_kolonne(gk.columns, [r"^grunnkretsnummer$", r"grunnkretsnr", r"grunnkrets.*nummer"])
         gk_navn = finn_kolonne(gk.columns, [r"^grunnkretsnavn$", r"grunnkrets.*navn"])
-        do_nr = finn_kolonne(do.columns, [r"^delområdenummer$", r"delomr.*nummer", r"delomr.*nr"])
-        do_navn = finn_kolonne(do.columns, [r"^delområdenavn$", r"delomr.*navn"])
-        if not gk_nr or not do_nr:
+        if not gk_nr:
             sys.exit("Fant ikke nummerkolonner – se kolonnelistene over.")
 
         prefiks = tuple(nummer)
         gk = gk[gk[gk_nr].astype(str).str.startswith(prefiks)].drop_duplicates(subset=[gk_nr])
-        do = do[do[do_nr].astype(str).str.startswith(prefiks)].drop_duplicates(subset=[do_nr])
-        print(f"{len(gk)} grunnkretser og {len(do)} delområder i regionen")
+        print(f"{len(gk)} grunnkretser i regionen")
 
         with conn.cursor() as cur:
-            rader = []
-            for _, r in do.iterrows():
-                g = som_multi(r.geometry)
-                if g is None:
-                    continue
-                nr = str(r[do_nr])
-                rader.append((nr, str(r[do_navn]) if do_navn else None, nr[:4], g.wkt))
-            cur.executemany(
-                """insert into delomrade (delomradenr, navn, kommunenr, geom)
-                   values (%s, %s, %s, extensions.st_geomfromtext(%s, 25833))
-                   on conflict (delomradenr) do update set navn = excluded.navn,
-                     kommunenr = excluded.kommunenr, geom = excluded.geom""",
-                rader,
-            )
-            print(f"Lagret {len(rader)} delområder")
+
 
             rader = []
             for _, r in gk.iterrows():
@@ -121,9 +99,21 @@ def main():
                 rader,
             )
             print(f"Lagret {len(rader)} grunnkretser")
+            # Delområder = grunnkretser med samme første seks sifre, slått sammen
+            cur.execute("""
+                insert into delomrade (delomradenr, kommunenr, geom)
+                select delomradenr, min(kommunenr),
+                       extensions.st_multi(extensions.st_collectionextract(
+                         extensions.st_union(extensions.st_makevalid(geom)), 3))
+                from grunnkrets
+                where kommunenr = any(%s) and delomradenr is not null
+                group by delomradenr
+                on conflict (delomradenr) do update set kommunenr = excluded.kommunenr, geom = excluded.geom
+            """, (list(nummer),))
+            print(f"Lagret {cur.rowcount} delområder (sammenslått fra grunnkretser)")
             cur.execute(
                 "insert into kilde_logg (kilde, datasett, rader, merknad) values (%s, %s, %s, %s)",
-                ("Kartverket WFS", "Grunnkretser og delområder", len(rader), f"{len(do)} delområder"),
+                ("Kartverket WFS", "Grunnkretser og delområder", len(rader), "delområder avledet fra grunnkretser"),
             )
         conn.commit()
 
