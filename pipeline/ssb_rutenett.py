@@ -77,14 +77,15 @@ def kommunepolygoner(nummer):
 
 
 def hent_ruter(lagnavn, bbox):
+    """Blar gjennom hele laget (tjenesten gir maks 1000 per side og ignorerer bbox)
+    og beholder bare ruter innenfor regionens utstrekning."""
     minx, miny, maxx, maxy = bbox
     deler, sett = [], set()
-    start = 0
+    start, sider, totalt = 0, 0, 0
     while True:
         params = {
             "service": "WFS", "version": "2.0.0", "request": "GetFeature",
-            "typeNames": lagnavn, "srsName": "urn:ogc:def:crs:EPSG::25833",
-            "bbox": f"{minx},{miny},{maxx},{maxy},urn:ogc:def:crs:EPSG::25833",
+            "typeNames": lagnavn, "srsName": "EPSG:25833",
             "count": SIDE, "startIndex": start,
         }
         r = requests.get(WFS, params=params, headers=UA, timeout=600)
@@ -106,13 +107,21 @@ def hent_ruter(lagnavn, bbox):
         if nøkkel in sett:  # tjenesten ignorerer startIndex
             break
         sett.add(nøkkel)
-        deler.append(gdf)
-        print(f"  hentet {len(gdf)} ruter (fra {start})")
-        if len(gdf) < SIDE:
-            break
-        start += SIDE
+        sider += 1
+        totalt += len(gdf)
+        if gdf.crs is None:
+            gdf = gdf.set_crs(25833)
+        elif gdf.crs.to_epsg() != 25833:
+            gdf = gdf.to_crs(25833)
+        inne = gdf.cx[minx:maxx, miny:maxy]
+        if not inne.empty:
+            deler.append(inne)
+        if sider % 25 == 0:
+            print(f"  {sider} sider, {totalt} ruter lest, {sum(len(d) for d in deler)} i utsnittet")
+        start += len(gdf)
+    print(f"Leste {totalt} ruter på {sider} sider, {sum(len(d) for d in deler)} innenfor utsnittet")
     if not deler:
-        raise SystemExit("WFS-tjenesten returnerte ingen ruter.")
+        raise SystemExit("WFS-tjenesten returnerte ingen ruter i regionen.")
     alle = pd.concat(deler, ignore_index=True)
     return gpd.GeoDataFrame(alle, geometry="geometry", crs=deler[0].crs)
 
