@@ -7,7 +7,9 @@ import os
 import sys
 from datetime import date
 
-from ssb_rutenett import koble_til
+import shapely
+
+from ssb_rutenett import koble_til, kommunepolygoner
 
 FELT = ["tog", "tbane", "buss", "dagl", "skole", "bhg", "sjo", "skog"]
 
@@ -26,19 +28,18 @@ def main():
         """).fetchall()
         do_idx = {r[0]: i for i, r in enumerate(do_rader)}
 
-        km = conn.execute("""
+        kinfo = conn.execute("""
             select k.kommunenr, k.navn,
-                   max(s.verdi) filter (where s.tema = 'inntekt_etter_skatt_median' and s.kategori = '0000'),
-                   extensions.st_asgeojson(extensions.st_transform(
-                     extensions.st_simplifypreservetopology(
-                       extensions.st_union(extensions.st_snaptogrid(
-                         extensions.st_simplifypreservetopology(g.geom, 50), 10)), 150), 4326), 4)
+                   max(s.verdi) filter (where s.tema = 'inntekt_etter_skatt_median' and s.kategori = '0000')
             from kommune k
-            join grunnkrets g using (kommunenr)
             left join region_stat s on s.regionkode = k.kommunenr and s.nivaa = 'kommune'
-            where k.i_region
-            group by 1, 2 order by 1
+            where k.i_region group by 1, 2 order by 1
         """).fetchall()
+        poly = kommunepolygoner([r[0] for r in kinfo]).set_index("kommunenr")
+        poly["geometry"] = poly.geometry.simplify(150, preserve_topology=True)
+        poly = poly.to_crs(4326)
+        km = [(r[0], r[1], r[2], shapely.to_geojson(shapely.set_precision(poly.loc[r[0], "geometry"], 0.0001)))
+              for r in kinfo]
         k_idx = {r[0]: i for i, r in enumerate(km)}
 
         alder = conn.execute("""
