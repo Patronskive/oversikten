@@ -69,6 +69,12 @@ def main():
         """).fetchall()
 
         aar = conn.execute("select max(aar) from rute250").fetchone()[0]
+        mål = conn.execute("select id, navn from reisemal where aktiv order by rekkefolge").fetchall()
+        reise = {}
+        for mid, ssbid, minutter in conn.execute(
+                "select maal_id, ssbid, minutter from rute_reisetid t join reisemal m on m.id = t.maal_id where m.aktiv"):
+            reise.setdefault(mid, {})[ssbid] = minutter
+        reisedag = conn.execute("select max(beregnet_for) from rute_reisetid").fetchone()[0]
 
     data = {
         "laget": date.today().isoformat(),
@@ -77,13 +83,16 @@ def main():
             "SSB: befolkning på 250 m-rutenett, alder per grunnkrets, husholdningsinntekt per delområde (NLOD)",
             "Kartverket: grunnkretsgrenser (CC BY 4.0)",
             "OpenStreetMap-bidragsytere: gangnett, stasjoner, butikker, skoler, kyst og skog (ODbL)",
+            "Entur: rutetider for kollektivtrafikk (NLOD)",
         ],
+        "maal": [{"id": m[0], "navn": m[1]} for m in mål if m[0] in reise],
+        "reisedag": reisedag.isoformat() if reisedag else None,
         "kommuner": [
             {"nr": r[0], "navn": r[1], "inntekt": r[2], "geom": json.loads(r[3])} for r in km
         ],
         "delomrader": [{"nr": r[0], "inntekt": r[1]} for r in do_rader],
         "ruter": {"lon": [], "lat": [], "bosatte": [], "kommune": [], "delomrade": [], "barn_pst": [],
-                  **{f: [] for f in FELT}},
+                  **{f: [] for f in FELT}, "reise": {m[0]: [] for m in mål if m[0] in reise}},
     }
     R = data["ruter"]
     for r in ruter:
@@ -96,6 +105,8 @@ def main():
         R["barn_pst"].append(round(100 * b / alle) if alle >= 30 else None)
         for f, v in zip(FELT, r[5:13]):
             R[f].append(v)
+        for mid, liste in R["reise"].items():
+            liste.append(reise[mid].get(r[0]))
 
     os.makedirs(os.path.dirname(os.path.abspath(ut)), exist_ok=True)
     with open(ut, "w", encoding="utf-8") as f:

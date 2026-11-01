@@ -62,7 +62,7 @@ jobs:
             rm norway.osm.pbf
           fi
           curl -sSfL -o gtfs.zip https://storage.googleapis.com/marduk-production/outbound/gtfs/rb_norway-aggregated-gtfs.zip
-          python reisetid.py region.osm.pbf gtfs.zip --max-memory 13G
+          python -u reisetid.py region.osm.pbf gtfs.zip --max-memory 13G
       - name: Eksporter data til appen
         if: inputs.steg == 'alt' || inputs.steg == 'eksport'
         run: |

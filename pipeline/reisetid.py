@@ -17,6 +17,7 @@ from shapely.geometry import Point
 
 from ssb_rutenett import koble_til
 
+BATCH = 2000
 FILER = [a for a in sys.argv[1:] if not a.startswith("--") and not a.endswith("G")]
 
 
@@ -42,59 +43,69 @@ def main():
         sys.exit("Mangler SUPABASE_DB_URL")
     with koble_til(url) as conn:
         mål = conn.execute("select id, navn, lon, lat from reisemal where aktiv order by rekkefolge").fetchall()
+        dag = reisedag()
         ruter = conn.execute("""
-            select ssbid,
-                   extensions.st_x(extensions.st_transform(extensions.st_centroid(geom), 4326)),
-                   extensions.st_y(extensions.st_transform(extensions.st_centroid(geom), 4326))
-            from rute250 order by ssbid
-        """).fetchall()
+            select r.ssbid,
+                   extensions.st_x(extensions.st_transform(extensions.st_centroid(r.geom), 4326)),
+                   extensions.st_y(extensions.st_transform(extensions.st_centroid(r.geom), 4326))
+            from rute250 r
+            where (select count(*) from rute_reisetid t join reisemal m on m.id = t.maal_id
+                   where t.ssbid = r.ssbid and m.aktiv and t.beregnet_for >= %s - 60) < %s
+            order by r.ssbid
+        """, (dag, len(mål))).fetchall()
 
-    fra = gpd.GeoDataFrame({"id": [r[0] for r in ruter]}, geometry=[Point(r[1], r[2]) for r in ruter], crs=4326)
+    if not ruter:
+        print("Alle ruter har ferske reisetider")
+        return
     til = gpd.GeoDataFrame({"id": [m[0] for m in mål]}, geometry=[Point(m[2], m[3]) for m in mål], crs=4326)
-    dag = reisedag()
     avreise = dt.datetime.combine(dag, dt.time(7, 0))
-    print(f"{len(fra)} ruter til {len(til)} mål ({', '.join(m[1] for m in mål)}), avreise {avreise:%A %d.%m.%Y %H:%M}–08:00")
+    print(f"{len(ruter)} ruter mangler reisetid, til {len(til)} mål ({', '.join(m[1] for m in mål)}), avreise {avreise:%A %d.%m.%Y %H:%M}–08:00")
 
     t0 = time.time()
     nett = r5py.TransportNetwork(pbf, [gtfs], allow_errors=True) if "allow_errors" in r5py.TransportNetwork.__init__.__code__.co_varnames \
         else r5py.TransportNetwork(pbf, [gtfs])
     print(f"Transportnett bygget på {time.time() - t0:.0f} s")
 
-    t0 = time.time()
-    ttm = r5py.TravelTimeMatrix(
-        nett,
-        origins=fra,
-        destinations=til,
-        departure=avreise,
-        departure_time_window=dt.timedelta(hours=1),
-        transport_modes=[r5py.TransportMode.TRANSIT, r5py.TransportMode.WALK],
-        max_time=dt.timedelta(minutes=120),
-        speed_walking=4.8,
-        snap_to_network=500,
-    )
-    df = ttm.compute_travel_times() if hasattr(ttm, "compute_travel_times") else pd.DataFrame(ttm)
-    print(f"Reisetider beregnet på {time.time() - t0:.0f} s, kolonner {list(df.columns)}")
-    tid_kol = "travel_time" if "travel_time" in df.columns else [c for c in df.columns if c not in ("from_id", "to_id")][0]
-
-    for m in mål:
-        v = df.loc[df["to_id"] == m[0], tid_kol]
-        print(f"  {m[1]}: median {v.median():.0f} min, {v.notna().mean() * 100:.0f} % av rutene innen 120 min")
-
-    rader = [(r.from_id, r.to_id, None if pd.isna(getattr(r, tid_kol)) else int(getattr(r, tid_kol)), dag)
-             for r in df.itertuples(index=False)]
-    with koble_til(url) as conn, conn.cursor() as cur:
-        for s in range(0, len(rader), 5000):
+    totalt = 0
+    for s in range(0, len(ruter), BATCH):
+        del_ = ruter[s:s + BATCH]
+        fra = gpd.GeoDataFrame({"id": [r[0] for r in del_]}, geometry=[Point(r[1], r[2]) for r in del_], crs=4326)
+        t0 = time.time()
+        ttm = r5py.TravelTimeMatrix(
+            nett,
+            origins=fra,
+            destinations=til,
+            departure=avreise,
+            departure_time_window=dt.timedelta(hours=1),
+            transport_modes=[r5py.TransportMode.TRANSIT, r5py.TransportMode.WALK],
+            max_time=dt.timedelta(minutes=120),
+            speed_walking=4.8,
+            snap_to_network=500,
+        )
+        df = ttm.compute_travel_times() if hasattr(ttm, "compute_travel_times") else pd.DataFrame(ttm)
+        tid_kol = "travel_time" if "travel_time" in df.columns else [c for c in df.columns if c not in ("from_id", "to_id")][0]
+        rader = [(r.from_id, r.to_id, None if pd.isna(getattr(r, tid_kol)) else int(getattr(r, tid_kol)), dag)
+                 for r in df.itertuples(index=False)]
+        with koble_til(url) as conn, conn.cursor() as cur:
             cur.executemany(
                 """insert into rute_reisetid (ssbid, maal_id, minutter, beregnet_for) values (%s, %s, %s, %s)
                    on conflict (ssbid, maal_id) do update set minutter = excluded.minutter, beregnet_for = excluded.beregnet_for""",
-                rader[s:s + 5000],
+                rader,
             )
-        cur.execute(
+            conn.commit()
+        totalt += len(rader)
+        print(f"  {s + len(del_)}/{len(ruter)} ruter ferdig ({time.time() - t0:.0f} s for denne bunken)", flush=True)
+        for m in mål:
+            v = df.loc[df["to_id"] == m[0], tid_kol]
+            print(f"    {m[1]}: median {v.median():.0f} min, {v.notna().mean() * 100:.0f} % innen 120 min", flush=True)
+
+    with koble_til(url) as conn:
+        conn.execute(
             "insert into kilde_logg (kilde, datasett, rader, merknad) values (%s, %s, %s, %s)",
-            ("Entur GTFS + OSM (r5py)", "Reisetid kollektiv", len(rader), f"Avreise 07–08 {dag.isoformat()}"),
+            ("Entur GTFS + OSM (r5py)", "Reisetid kollektiv", totalt, f"Avreise 07–08 {dag.isoformat()}"),
         )
         conn.commit()
-    print(f"Ferdig: {len(rader)} reisetider lagret")
+    print(f"Ferdig: {totalt} reisetider lagret")
 
 
 if __name__ == "__main__":
