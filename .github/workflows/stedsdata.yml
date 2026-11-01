@@ -7,7 +7,7 @@ on:
         description: Hva skal kjøres
         type: choice
         default: alt
-        options: [alt, tabeller, rutenett]
+        options: [alt, tabeller, rutenett, meta, grunnkretser]
 
 jobs:
   hent:
@@ -33,3 +33,6 @@ jobs:
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: python ssb_rutenett.py
+      - name: Struktur for SSB-tabeller og grunnkrets-WFS
+        if: inputs.steg == 'meta'
+        run: python ssb_meta.py
