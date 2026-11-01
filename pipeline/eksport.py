@@ -15,6 +15,7 @@ FELT = ["tog", "tbane", "buss", "dagl", "skole", "bhg", "sjo", "skog"]
 def main():
     ut = sys.argv[1] if len(sys.argv) > 1 else "../data/stedsdata.json"
     with koble_til(os.environ["SUPABASE_DB_URL"]) as conn:
+        conn.execute("set statement_timeout = '15min'")
         do_rader = conn.execute("""
             select d.delomradenr,
                    max(s.verdi) filter (where s.tema = 'inntekt_etter_skatt_median' and s.kategori = '0000'),
@@ -29,7 +30,9 @@ def main():
             select k.kommunenr, k.navn,
                    max(s.verdi) filter (where s.tema = 'inntekt_etter_skatt_median' and s.kategori = '0000'),
                    extensions.st_asgeojson(extensions.st_transform(
-                     extensions.st_simplifypreservetopology(extensions.st_union(g.geom), 150), 4326), 4)
+                     extensions.st_simplifypreservetopology(
+                       extensions.st_union(extensions.st_snaptogrid(
+                         extensions.st_simplifypreservetopology(g.geom, 50), 10)), 150), 4326), 4)
             from kommune k
             join grunnkrets g using (kommunenr)
             left join region_stat s on s.regionkode = k.kommunenr and s.nivaa = 'kommune'
