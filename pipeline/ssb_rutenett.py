@@ -86,7 +86,7 @@ def hent_ruter(lagnavn, bbox):
         params = {
             "service": "WFS", "version": "2.0.0", "request": "GetFeature",
             "typeNames": lagnavn, "srsName": "EPSG:25833",
-            "count": SIDE, "startIndex": start,
+            "count": SIDE, "startIndex": start, "sortBy": os.environ.get("WFS_SORTBY", "ssbid250m"),
         }
         r = requests.get(WFS, params=params, headers=UA, timeout=600)
         r.raise_for_status()
