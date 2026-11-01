@@ -99,7 +99,7 @@ def main():
 
     os.makedirs(os.path.dirname(os.path.abspath(ut)), exist_ok=True)
     with open(ut, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
+        json.dump(data, f, ensure_ascii=False, separators=(",", ":"), default=float)
     print(f"Skrev {ut}: {len(ruter)} ruter, {len(km)} kommuner, {len(do_rader)} delområder, "
           f"{os.path.getsize(ut) / 1e6:.1f} MB")
 
