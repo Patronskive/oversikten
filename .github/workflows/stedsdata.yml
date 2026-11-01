@@ -7,15 +7,17 @@ on:
         description: Hva skal kjøres
         type: choice
         default: alt
-        options: [alt, tabeller, rutenett, meta, grunnkretser]
+        options: [alt, rutenett, grunnkretser, statistikk, tabeller, meta]
 
 jobs:
   hent:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     defaults:
       run:
         working-directory: pipeline
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -25,14 +27,18 @@ jobs:
           cache-dependency-path: pipeline/requirements.txt
       - name: Installer pakker
         run: pip install -r requirements.txt
-      - name: Kartlegg SSB-tabeller
-        if: inputs.steg == 'alt' || inputs.steg == 'tabeller'
-        run: python ssb_tabeller.py | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Befolkning på 250 m-rutenett
         if: inputs.steg == 'alt' || inputs.steg == 'rutenett'
-        env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: python ssb_rutenett.py
+      - name: Grunnkretser og delområder
+        if: inputs.steg == 'alt' || inputs.steg == 'grunnkretser'
+        run: python grunnkretser.py
+      - name: SSB-statistikk (alder, inntekt, husholdninger)
+        if: inputs.steg == 'alt' || inputs.steg == 'statistikk'
+        run: python ssb_statistikk.py
+      - name: Kartlegg SSB-tabeller
+        if: inputs.steg == 'tabeller'
+        run: python ssb_tabeller.py | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Struktur for SSB-tabeller og grunnkrets-WFS
         if: inputs.steg == 'meta'
         run: python ssb_meta.py
