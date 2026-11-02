@@ -63,6 +63,10 @@ canvas:active { cursor: grabbing; }
 .legende span { display: inline-flex; align-items: center; gap: 5px; }
 .legende i { width: 11px; height: 11px; border-radius: 2px; display: inline-block; }
 .zoom { position: absolute; right: max(12px, env(safe-area-inset-right, 0px)); top: 12px; display: flex; flex-direction: column; gap: 6px; }
+.zoom button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.zoom button svg { width: 20px; height: 20px; display: block; margin: auto; }
+.attr { position: absolute; right: max(8px, env(safe-area-inset-right, 0px)); bottom: 4px; font-size: 10px; color: var(--muted); background: color-mix(in srgb, var(--surface) 75%, transparent); padding: 1px 5px; border-radius: 4px; pointer-events: none; }
+.undertittel { margin: -2px 0 6px; color: var(--muted); font-size: 13px; }
 .zoom button { width: 40px; height: 40px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: 600 18px var(--font); cursor: pointer; }
 .zoom button:focus-visible, .tabs button:focus-visible, select:focus-visible, input:focus-visible, .treff button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 aside { min-height: 0; overflow-y: auto; background: var(--surface); border-left: 1px solid var(--line); display: flex; flex-direction: column; }
@@ -125,7 +129,9 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
         <button id="inn" aria-label="Zoom inn">+</button>
         <button id="ut" aria-label="Zoom ut">−</button>
         <button id="hjem" aria-label="Vis hele regionen">⤢</button>
+        <button id="bakgrunn" aria-label="Bakgrunnskart" aria-pressed="true" title="Bakgrunnskart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15M15 6v15"/></svg></button>
       </div>
+      <div class="attr" id="attr" hidden>Kart © Kartverket · Stedsnavn © OpenStreetMap</div>
       <div class="legende" id="legende"></div>
     </div>
     <aside>
@@ -179,6 +185,20 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
     return [x, y];
   }
 
+  function utmInv(x, y) {
+    const M = y / K0, mu = M / (A * (1 - E2 / 4 - 3 * E4 / 64 - 5 * E6 / 256));
+    const e1 = (1 - Math.sqrt(1 - E2)) / (1 + Math.sqrt(1 - E2));
+    const p1 = mu + (3 * e1 / 2 - 27 * e1 ** 3 / 32) * Math.sin(2 * mu) + (21 * e1 * e1 / 16 - 55 * e1 ** 4 / 32) * Math.sin(4 * mu)
+      + (151 * e1 ** 3 / 96) * Math.sin(6 * mu) + (1097 * e1 ** 4 / 512) * Math.sin(8 * mu);
+    const sp = Math.sin(p1), cp = Math.cos(p1), tp = Math.tan(p1);
+    const N1 = A / Math.sqrt(1 - E2 * sp * sp), T1 = tp * tp, C1 = EP2 * cp * cp, R1 = A * (1 - E2) / Math.pow(1 - E2 * sp * sp, 1.5);
+    const Dd = (x - 500000) / (N1 * K0);
+    const lat = p1 - (N1 * tp / R1) * (Dd * Dd / 2 - (5 + 3 * T1 + 10 * C1 - 4 * C1 * C1 - 9 * EP2) * Dd ** 4 / 24
+      + (61 + 90 * T1 + 298 * C1 + 45 * T1 * T1 - 252 * EP2 - 3 * C1 * C1) * Dd ** 6 / 720);
+    const lon = L0 + (Dd - (1 + 2 * T1 + C1) * Dd ** 3 / 6 + (5 - 2 * C1 + 28 * T1 - 3 * C1 * C1 + 8 * EP2 + 24 * T1 * T1) * Dd ** 5 / 120) / cp;
+    return [lon * 180 / Math.PI, lat * 180 / Math.PI];
+  }
+
   // ---------- kriterier ----------
   const GANG = 80; // m per minutt
   const KRAV = [
@@ -202,13 +222,13 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
     { id: "bos", navn: "Bosatte per rute", felt: "bosatte", type: "pers", maks: 400, nær: false },
   ];
 
-  let tilstand = { modus: "krit", lag: "tog", krav: {} };
+  let tilstand = { modus: "krit", lag: "tog", krav: {}, bakgrunn: true };
   KRAV.forEach(k => tilstand.krav[k.id] = { på: k.på, v: k.std, tillegg: true });
   try { const s = JSON.parse(localStorage.getItem("omradefinner") || "null"); if (s && s.krav) tilstand = Object.assign(tilstand, s, { krav: Object.assign(tilstand.krav, s.krav) }); } catch (e) {}
   function lagre() { try { localStorage.setItem("omradefinner", JSON.stringify(tilstand)); } catch (e) {} }
 
   // ---------- data ----------
-  let D, n = 0, X, Y, IX, IY, rutekart, status, klynger = [], kommuner = [], valgt = -1;
+  let D, n = 0, X, Y, IX, IY, rutekart, status, klynger = [], kommuner = [], steder = [], valgt = -1;
   const el = id => document.getElementById(id);
 
   fetch("data/stedsdata.json").then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(start)
@@ -226,6 +246,7 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
     R.kollektiv = R.tog.map((t, i) => minIkkeNull(t, R.tbane[i]));
     R.inntekt = R.delomrade.map(d => d == null ? null : D.delomrader[d].inntekt);
     kommuner = D.kommuner.map(k => ({ navn: k.navn, nr: k.nr, inntekt: k.inntekt, ringer: tilUtmRinger(k.geom) }));
+    steder = (D.steder || []).map(([navn, rang, lon, lat, folk]) => { const [x, y] = utm(lon, lat); return { navn, rang, x, y, folk }; });
     if (D.maal && D.maal.length && R.reise) {
       KRAV.unshift({ id: "reise", navn: "Reisetid med kollektiv", type: "reise", min: 10, max: 120, steg: 5, std: 45, på: true });
       if (!tilstand.krav.reise || !D.maal.some(m => m.id === tilstand.krav.reise.maal)) tilstand.krav.reise = { på: true, v: 45, maal: D.maal[0].id };
@@ -234,6 +255,7 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
     }
     el("kilder").textContent = "Kilder: " + D.kilder.join(" · ") + ". Befolkning per " + D.befolkningsaar + ", data hentet " + D.laget + ".";
     el("status").hidden = true;
+    el("bakgrunn").setAttribute("aria-pressed", tilstand.bakgrunn !== false);
     byggPanel(); tilpass(); hjem(); beregn();
   }
   function minIkkeNull(a, b) { return a == null ? b : b == null ? a : Math.min(a, b); }
@@ -243,6 +265,20 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
     pol.forEach(p => p.forEach(ring => ut.push(ring.map(c => utm(c[0], c[1])))));
     return ut;
   }
+
+  // ---------- navn ----------
+  function stedVed(x, y, maksRang) {
+    let best = null, bs = 1e12;
+    for (const s of steder) {
+      if (s.rang > (maksRang || 5)) continue;
+      const d = Math.hypot(s.x - x, s.y - y); if (d > 3500) continue;
+      const poeng = d + (s.rang - 1) * 250;
+      if (poeng < bs) { bs = poeng; best = s; }
+    }
+    return best;
+  }
+  function delomradeNavn(i) { const d = D.ruter.delomrade[i]; return d == null ? "" : (D.delomrader[d].navn || ""); }
+  function grunnkretsNavn(i) { const g = D.ruter.grunnkrets ? D.ruter.grunnkrets[i] : null; return g == null || !D.grunnkretser ? "" : (D.grunnkretser[g] || ""); }
 
   // ---------- evaluering ----------
   function oppfylt(k, i) {
@@ -286,7 +322,10 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
       let bos = 0, sx = 0, sy = 0; const kt = {};
       med.forEach(j => { const b = D.ruter.bosatte[j] || 0; bos += b; sx += X[j]; sy += Y[j]; kt[D.ruter.kommune[j]] = (kt[D.ruter.kommune[j]] || 0) + 1; });
       const km = +Object.keys(kt).sort((a, b) => kt[b] - kt[a])[0];
-      klynger.push({ ruter: med, bos, cx: sx / med.length, cy: sy / med.length, kommune: kommuner[km] ? kommuner[km].navn : "" });
+      const cx = sx / med.length, cy = sy / med.length;
+      let midt = med[0], md = 1e12; med.forEach(j => { const d = (X[j] - cx) ** 2 + (Y[j] - cy) ** 2; if (d < md) { md = d; midt = j; } });
+      const sted = stedVed(cx, cy);
+      klynger.push({ ruter: med, bos, cx, cy, kommune: kommuner[km] ? kommuner[km].navn : "", sted: sted ? sted.navn : "", delomrade: delomradeNavn(midt) });
     }
     klynger.sort((a, b) => b.bos - a.bos);
   }
@@ -338,7 +377,7 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
     const boks = el("treff");
     if (!klynger.length) { boks.innerHTML = `<p class="tom">Ingen ruter oppfyller alle kravene. Gule ruter bommer på ett krav – prøv å løsne litt på det strengeste.</p>`; return; }
     boks.innerHTML = klynger.slice(0, 60).map((k, i) => `<button data-i="${i}"><span class="merke">${k.ruter.length}</span>
-      <span><span class="t1">${k.kommune}</span><br><span class="t2">${k.bos.toLocaleString("nb-NO")} bosatte · ${(k.ruter.length * 0.0625).toFixed(1).replace(".", ",")} km²</span></span><span aria-hidden="true">›</span></button>`).join("")
+      <span><span class="t1">${k.sted ? k.sted + " · " : ""}${k.kommune}</span><br><span class="t2">${k.delomrade && k.delomrade !== k.sted ? k.delomrade + " · " : ""}${k.bos.toLocaleString("nb-NO")} bosatte · ${(k.ruter.length * 0.0625).toFixed(1).replace(".", ",")} km²</span></span><span aria-hidden="true">›</span></button>`).join("")
       + (klynger.length > 60 ? `<p class="tom">Viser de 60 største av ${klynger.length} områder.</p>` : "");
     boks.querySelectorAll("button").forEach(b => b.onclick = () => {
       const k = klynger[+b.dataset.i]; let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
@@ -374,7 +413,10 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
     ];
     const st = ["Bommer på flere krav", "Bommer på ett krav", "Oppfyller alle krav"][status[i]];
     el("detTom").hidden = true; const d = el("det"); d.hidden = false;
-    d.innerHTML = `<h3>${km ? km.navn : ""}</h3><p class="tom">${st}</p><dl>${rader.map(([a, b, kid]) => {
+    const sted = stedVed(X[i], Y[i]); const don = delomradeNavn(i), gkn = grunnkretsNavn(i);
+    const tittel = sted ? sted.navn : (don || (km ? km.navn : ""));
+    const under = [don && don !== tittel ? "delområde " + don : "", gkn && gkn !== tittel && gkn !== don ? "grunnkrets " + gkn : "", km && km.navn !== tittel ? km.navn : ""].filter(Boolean).join(" · ");
+    d.innerHTML = `<h3>${tittel}</h3>${under ? `<p class="undertittel">${under}</p>` : ""}<p class="tom">${st}</p><dl>${rader.map(([a, b, kid]) => {
       const k = kid && KRAV.find(x => x.id === kid); const nei = k && tilstand.krav[kid].på && !oppfylt(k, i);
       return `<dt>${a}</dt><dd class="${nei ? "nei" : ""}">${b}</dd>`; }).join("")}</dl>
       <a class="lenke" href="https://www.finn.no/realestate/homes/search.html?q=${encodeURIComponent(km ? km.navn : "")}" target="_blank" rel="noopener">Se boliger i ${km ? km.navn : "kommunen"} på FINN</a>
@@ -409,6 +451,9 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
     // kommuner
     ctx.fillStyle = css("--land"); ctx.strokeStyle = css("--border"); ctx.lineWidth = 0.8;
     kommuner.forEach(k => { ctx.beginPath(); k.ringer.forEach(r => { r.forEach(([x, y], j) => j ? ctx.lineTo(sx(x), sy(y)) : ctx.moveTo(sx(x), sy(y))); ctx.closePath(); }); ctx.fill("evenodd"); });
+    const medKart = tilstand.bakgrunn && !kartFeil && tegnBakgrunn();
+    el("attr").hidden = !medKart;
+    ctx.lineWidth = medKart ? 1.2 : 0.8;
     kommuner.forEach(k => { ctx.beginPath(); k.ringer.forEach(r => { r.forEach(([x, y], j) => j ? ctx.lineTo(sx(x), sy(y)) : ctx.moveTo(sx(x), sy(y))); ctx.closePath(); }); ctx.stroke(); });
     // ruter
     const s = Math.max(1, 250 * skala), R = D.ruter;
@@ -422,7 +467,9 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
           if (x < x0 || x > x1 || y < y0 || y > y1) continue;
           ctx.fillRect(sx(x), sy(y + 250), s, s);
         }
+        if (st === 0 && medKart) ctx.globalAlpha = skala > 0.02 ? 0.6 : 0.8;
       }
+      ctx.globalAlpha = 1;
     } else {
       const l = LAG.find(a => a.id === tilstand.lag); const v = l.maal ? R.reise[l.maal] : R[l.felt]; const aks = css("--accent"), miss = css("--miss");
       ctx.globalAlpha = 1;
@@ -436,17 +483,75 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
         else if (l.type === "kr") t = (val - l.min) / (l.maks - l.min);
         else t = val / l.maks;
         t = Math.max(0.06, Math.min(1, t));
-        ctx.fillStyle = aks; ctx.globalAlpha = 0.12 + 0.88 * t; ctx.fillRect(sx(x), sy(y + 250), s, s);
+        ctx.fillStyle = aks; ctx.globalAlpha = (0.12 + 0.88 * t) * (medKart && skala > 0.02 ? 0.75 : 1); ctx.fillRect(sx(x), sy(y + 250), s, s);
       }
       ctx.globalAlpha = 1;
     }
-    // kommunenavn
-    if (skala > 0.0025) {
-      ctx.fillStyle = css("--muted"); ctx.font = "600 12px " + css("--font"); ctx.textAlign = "center";
-      kommuner.forEach(k => { let mx = 0, my = 0, c = 0; k.ringer[0].forEach(([x, y]) => { mx += x; my += y; c++; }); ctx.fillText(k.navn, sx(mx / c), sy(my / c)); });
-    }
+    tegnNavn(sx, sy);
     if (valgt >= 0) { ctx.strokeStyle = css("--sel"); ctx.lineWidth = 2; ctx.strokeRect(sx(IX[valgt] * 250) - 1, sy(IY[valgt] * 250 + 250) - 1, s + 2, s + 2); }
   }
+  // ---------- bakgrunnskart (Kartverket, web mercator-fliser lagt på UTM-kartet) ----------
+  const fliser = new Map(); let kartFeil = false, feilAnt = 0, okAnt = 0;
+  const FLIS = (z, x, y) => `https://cache.kartverket.no/v1/wmts/1.0.0/topograatone/default/webmercator/${z}/${y}/${x}.png`;
+  function merc(lon, lat, z) { const k = 2 ** z, r = lat * Math.PI / 180; return [(lon + 180) / 360 * k, (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * k]; }
+  function mercInv(tx, ty, z) { const k = 2 ** z; const lon = tx / k * 360 - 180; const lat = Math.atan(Math.sinh(Math.PI * (1 - 2 * ty / k))) * 180 / Math.PI; return [lon, lat]; }
+  function hentFlis(z, x, y) {
+    const nøkkel = z + "/" + x + "/" + y; let f = fliser.get(nøkkel);
+    if (!f) {
+      f = { img: new Image(), ok: false }; fliser.set(nøkkel, f);
+      f.img.onload = () => { f.ok = true; okAnt++; tegn(); };
+      f.img.onerror = () => { feilAnt++; if (feilAnt > 6 && okAnt === 0) { kartFeil = true; el("bakgrunn").hidden = true; tegn(); } };
+      f.img.src = FLIS(z, x, y);
+      if (fliser.size > 600) { const første = fliser.keys().next().value; fliser.delete(første); }
+    }
+    return f;
+  }
+  function tegnBakgrunn() {
+    const hjørner = [[0, 0], [B, 0], [0, H], [B, H], [B / 2, 0], [B / 2, H], [0, H / 2], [B, H / 2]].map(([px, py]) => utmInv(ox + px / skala, oy - py / skala));
+    const lons = hjørner.map(c => c[0]), lats = hjørner.map(c => c[1]);
+    const midtLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+    const z = Math.max(5, Math.min(17, Math.round(Math.log2(156543.03 * Math.cos(midtLat * Math.PI / 180) * skala * Math.min(dpr, 1.5)))));
+    const [ax, ay] = merc(Math.min(...lons), Math.max(...lats), z), [bx, by] = merc(Math.max(...lons), Math.min(...lats), z);
+    const mørk = matchMedia("(prefers-color-scheme: dark)").matches && document.documentElement.dataset.theme !== "light" || document.documentElement.dataset.theme === "dark";
+    let tegnet = 0;
+    ctx.save(); ctx.globalAlpha = mørk ? 0.28 : 0.9;
+    for (let tx = Math.floor(ax); tx <= Math.floor(bx); tx++) for (let ty = Math.floor(ay); ty <= Math.floor(by); ty++) {
+      const f = hentFlis(z, tx, ty); if (!f.ok) continue;
+      const p = (u, v) => { const [lo, la] = mercInv(tx + u, ty + v, z); const [x, y] = utm(lo, la); return [(x - ox) * skala, (oy - y) * skala]; };
+      const nw = p(0, 0), ne = p(1, 0), sw = p(0, 1);
+      ctx.setTransform(dpr * (ne[0] - nw[0]) / 256, dpr * (ne[1] - nw[1]) / 256, dpr * (sw[0] - nw[0]) / 256, dpr * (sw[1] - nw[1]) / 256, dpr * nw[0], dpr * nw[1]);
+      ctx.drawImage(f.img, 0, 0, 256, 256, -0.3, -0.3, 256.6, 256.6); tegnet++;
+    }
+    ctx.restore(); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return tegnet > 0;
+  }
+  el("bakgrunn").onclick = () => { tilstand.bakgrunn = !tilstand.bakgrunn; el("bakgrunn").setAttribute("aria-pressed", tilstand.bakgrunn); tegn(); lagre(); };
+
+  // ---------- navn i kartet ----------
+  function tegnNavn(sx, sy) {
+    const font = css("--font"), opptatt = [];
+    const ledig = (x0, y0, x1, y1) => { if (x1 < 0 || x0 > B || y1 < 0 || y0 > H) return false; for (const r of opptatt) if (x0 < r[2] && x1 > r[0] && y0 < r[3] && y1 > r[1]) return false; opptatt.push([x0, y0, x1, y1]); return true; };
+    ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
+    ctx.strokeStyle = css("--surface"); ctx.lineWidth = 3;
+    const maksRang = skala < 0.004 ? 2 : skala < 0.012 ? 3 : skala < 0.05 ? 4 : 5;
+    for (const s of steder) {
+      if (s.rang > maksRang) continue;
+      const stor = s.rang <= 2, str = s.rang === 1 ? 14 : s.rang === 2 ? 13 : s.rang === 3 ? 12 : 11;
+      ctx.font = `${stor ? 700 : s.rang === 3 ? 600 : 500} ${str}px ${font}`;
+      const x = sx(s.x), y = sy(s.y), b = ctx.measureText(s.navn).width;
+      if (!ledig(x - b / 2 - 3, y - str / 2 - 2, x + b / 2 + 3, y + str / 2 + 2)) continue;
+      ctx.fillStyle = css(s.rang <= 3 ? "--ink" : "--muted");
+      ctx.strokeText(s.navn, x, y); ctx.fillText(s.navn, x, y);
+    }
+    if (skala < 0.006) {
+      ctx.font = "600 11px " + font; ctx.fillStyle = css("--muted");
+      kommuner.forEach(k => { let mx = 0, my = 0, c = 0; k.ringer[0].forEach(([x, y]) => { mx += x; my += y; c++; });
+        const x = sx(mx / c), y = sy(my / c) + 14, t = k.navn.toUpperCase(), b = ctx.measureText(t).width;
+        if (ledig(x - b / 2, y - 7, x + b / 2, y + 7)) { ctx.strokeText(t, x, y); ctx.fillText(t, x, y); } });
+    }
+    ctx.textBaseline = "alphabetic";
+  }
+
   function legende() {
     const L = el("legende");
     if (tilstand.modus === "krit") L.innerHTML = `<span><i style="background:var(--match)"></i>Alle krav</span><span><i style="background:var(--near)"></i>Bommer på ett</span><span><i style="background:var(--miss);outline:1px solid var(--line)"></i>Flere</span>`;
