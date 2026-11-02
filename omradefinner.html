@@ -171,11 +171,11 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
         <p class="tom">Gangtid er regnet langs veier og stier i 4,8 km/t. Gul betyr at ruta bommer på ett krav.</p>
         <div class="boligfilter" id="boligfilter">
           <h2>Boligsøk på FINN</h2>
-          <p class="tom" style="margin-top:0">Brukes i FINN-lenkene for treffområdene. Tomme felt betyr ingen grense.</p>
+          <p class="tom" style="margin-top:0">Brukes i FINN-lenkene for treffområdene. Totalpris er inkludert fellesgjeld. Tomme felt betyr ingen grense.</p>
           <div class="chips" id="bTyper" role="group" aria-label="Boligtype"></div>
           <div class="felt">
-            <label>Pris fra (mill. kr)<input type="number" inputmode="decimal" min="0" step="0.5" id="bPrisFra"></label>
-            <label>Pris til (mill. kr)<input type="number" inputmode="decimal" min="0" step="0.5" id="bPrisTil"></label>
+            <label>Totalpris fra (mill. kr)<input type="number" inputmode="decimal" min="0" step="0.5" id="bPrisFra"></label>
+            <label>Totalpris til (mill. kr)<input type="number" inputmode="decimal" min="0" step="0.5" id="bPrisTil"></label>
             <label>Boareal fra (m²)<input type="number" inputmode="numeric" min="0" step="5" id="bArealFra"></label>
             <label>Boareal til (m²)<input type="number" inputmode="numeric" min="0" step="5" id="bArealTil"></label>
             <label>Soverom, minst<select id="bSoverom"><option value="">Alle</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></label>
@@ -378,7 +378,7 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
     (f.typer || []).forEach(t => q.push("property_type=" + t));
     const mill = v => v === "" || v == null || isNaN(+v) || +v <= 0 ? null : Math.round(+v * 1e6);
     const hel = v => v === "" || v == null || isNaN(+v) || +v <= 0 ? null : Math.round(+v);
-    [["price_from", mill(f.prisFra)], ["price_to", mill(f.prisTil)], ["area_from", hel(f.arealFra)], ["area_to", hel(f.arealTil)],
+    [["price_collective_from", mill(f.prisFra)], ["price_collective_to", mill(f.prisTil)], ["area_from", hel(f.arealFra)], ["area_to", hel(f.arealTil)],
      ["min_bedrooms", hel(f.soverom)], ["plot_area_from", hel(f.tomtFra)]].forEach(([k, v]) => { if (v != null) q.push(k + "=" + v); });
     return q.length ? "&" + q.join("&") : "";
   }
