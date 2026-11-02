@@ -359,8 +359,8 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
   }
 
   // ---------- boligfilter for FINN ----------
-  // Koder for boligtype: 1 = Enebolig er bekreftet mot finn.no; de andre er ikke verifisert ennå.
-  const BOLIGTYPER = [["1", "Enebolig"], ["4", "Tomannsbolig"], ["2", "Rekkehus"], ["3", "Leilighet"], ["5", "Gårdsbruk/småbruk"]];
+  // Koder for boligtype, bekreftet mot finn.no (property_type).
+  const BOLIGTYPER = [["1", "Enebolig"], ["2", "Tomannsbolig"], ["4", "Rekkehus"], ["3", "Leilighet"], ["11", "Gårdsbruk/småbruk"]];
   function finnFilter() {
     const f = tilstand.finn || {}, q = [];
     (f.typer || []).forEach(t => q.push("property_type=" + t));
@@ -372,6 +372,7 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
   }
   function byggBoligfilter() {
     const f = tilstand.finn = Object.assign({ typer: [] }, tilstand.finn);
+    if (f.kodeversjon !== 2) { f.typer = []; f.kodeversjon = 2; } // tidligere gjettede koder
     const chips = el("bTyper");
     chips.innerHTML = BOLIGTYPER.map(([k, navn]) => `<button type="button" data-k="${k}" aria-pressed="${f.typer.includes(k)}">${navn}</button>`).join("");
     chips.querySelectorAll("button").forEach(b => b.onclick = () => {
