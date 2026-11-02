@@ -19,12 +19,12 @@ def main():
     with koble_til(os.environ["SUPABASE_DB_URL"]) as conn:
         conn.execute("set statement_timeout = '15min'")
         do_rader = conn.execute("""
-            select d.delomradenr,
+            select d.delomradenr, d.navn,
                    max(s.verdi) filter (where s.tema = 'inntekt_etter_skatt_median' and s.kategori = '0000'),
                    max(s.aar) filter (where s.tema = 'inntekt_etter_skatt_median')
             from delomrade d
             left join region_stat s on s.regionkode = d.delomradenr and s.nivaa = 'delomrade'
-            group by 1 order by 1
+            group by 1, 2 order by 1
         """).fetchall()
         do_idx = {r[0]: i for i, r in enumerate(do_rader)}
 
@@ -68,6 +68,14 @@ def main():
             order by r.ssbid
         """).fetchall()
 
+        gk_rader = conn.execute("select grunnkretsnr, navn from grunnkrets order by 1").fetchall()
+        gk_idx = {r[0]: i for i, r in enumerate(gk_rader)}
+        try:
+            steder = conn.execute("""select navn, rang, round(lon::numeric, 4), round(lat::numeric, 4), coalesce(folketall, 0)
+                                     from stedsnavn order by rang, folketall desc nulls last, navn""").fetchall()
+        except Exception:
+            conn.rollback()
+            steder = []
         aar = conn.execute("select max(aar) from rute250").fetchone()[0]
         mål = conn.execute("select id, navn from reisemal where aktiv order by rekkefolge").fetchall()
         reise = {}
@@ -90,8 +98,10 @@ def main():
         "kommuner": [
             {"nr": r[0], "navn": r[1], "inntekt": r[2], "geom": json.loads(r[3])} for r in km
         ],
-        "delomrader": [{"nr": r[0], "inntekt": r[1]} for r in do_rader],
-        "ruter": {"lon": [], "lat": [], "bosatte": [], "kommune": [], "delomrade": [], "barn_pst": [],
+        "delomrader": [{"nr": r[0], "navn": r[1], "inntekt": r[2]} for r in do_rader],
+        "grunnkretser": [r[1] for r in gk_rader],
+        "steder": [[r[0], r[1], float(r[2]), float(r[3]), r[4]] for r in steder],
+        "ruter": {"lon": [], "lat": [], "bosatte": [], "kommune": [], "delomrade": [], "grunnkrets": [], "barn_pst": [],
                   **{f: [] for f in FELT}, "reise": {m[0]: [] for m in mål if m[0] in reise}},
     }
     R = data["ruter"]
@@ -101,6 +111,7 @@ def main():
         R["bosatte"].append(r[2])
         R["kommune"].append(k_idx.get(r[1]))
         R["delomrade"].append(do_idx.get(r[14]))
+        R["grunnkrets"].append(gk_idx.get(r[13]))
         b, alle = barn.get(r[13], (0, 0))
         R["barn_pst"].append(round(100 * b / alle) if alle >= 30 else None)
         for f, v in zip(FELT, r[5:13]):
