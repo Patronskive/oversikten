@@ -88,6 +88,15 @@ aside { min-height: 0; overflow-y: auto; background: var(--surface); border-left
 .krav.av output, .krav.av input[type=range] { opacity: 0.4; }
 .krav .tillegg { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
 .krav .tillegg input { width: 16px; height: 16px; accent-color: var(--accent); margin: 0; }
+.boligfilter { margin-top: 18px; padding-top: 4px; }
+.boligfilter .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 12px; }
+.boligfilter .chips button { height: 34px; padding: 0 12px; border-radius: 17px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: 500 13px var(--font); cursor: pointer; }
+.boligfilter .chips button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.boligfilter .felt { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; margin-bottom: 10px; }
+.boligfilter label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); min-width: 0; }
+.boligfilter input, .boligfilter select { box-sizing: border-box; min-width: 0; }
+.boligfilter input[type=number] { height: 40px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: 500 15px var(--font); padding: 0 10px; width: 100%; font-variant-numeric: tabular-nums; }
+.boligfilter .full { grid-column: 1 / -1; }
 select { height: 40px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: 500 14px var(--font); padding: 0 10px; width: 100%; }
 .treff { display: flex; flex-direction: column; }
 .treff button { display: grid; grid-template-columns: 44px 1fr auto; gap: 10px; align-items: center; text-align: left; padding: 10px 0; border: 0; border-top: 1px solid var(--line); background: transparent; color: var(--ink); font: inherit; cursor: pointer; }
@@ -158,6 +167,19 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
           <div id="krav"></div>
         </div>
         <p class="tom">Gangtid er regnet langs veier og stier i 4,8 km/t. Gul betyr at ruta bommer på ett krav.</p>
+        <div class="boligfilter" id="boligfilter">
+          <h2>Boligsøk på FINN</h2>
+          <p class="tom" style="margin-top:0">Brukes i FINN-lenkene for treffområdene. Tomme felt betyr ingen grense.</p>
+          <div class="chips" id="bTyper" role="group" aria-label="Boligtype"></div>
+          <div class="felt">
+            <label>Pris fra (mill. kr)<input type="number" inputmode="decimal" min="0" step="0.5" id="bPrisFra"></label>
+            <label>Pris til (mill. kr)<input type="number" inputmode="decimal" min="0" step="0.5" id="bPrisTil"></label>
+            <label>Boareal fra (m²)<input type="number" inputmode="numeric" min="0" step="5" id="bArealFra"></label>
+            <label>Boareal til (m²)<input type="number" inputmode="numeric" min="0" step="5" id="bArealTil"></label>
+            <label>Soverom, minst<select id="bSoverom"><option value="">Alle</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></label>
+            <label>Tomt fra (m²)<input type="number" inputmode="numeric" min="0" step="100" id="bTomtFra"></label>
+          </div>
+        </div>
       </section>
       <section class="panel" id="pTreff" hidden>
         <h2>Sammenhengende områder som passer</h2>
@@ -226,7 +248,7 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
     { id: "bos", navn: "Bosatte per rute", felt: "bosatte", type: "pers", maks: 400, nær: false },
   ];
 
-  let tilstand = { modus: "krit", lag: "tog", krav: {}, bakgrunn: true };
+  let tilstand = { modus: "krit", lag: "tog", krav: {}, bakgrunn: true, finn: { typer: [] } };
   KRAV.forEach(k => tilstand.krav[k.id] = { på: k.på, v: k.std, tillegg: true });
   try { const s = JSON.parse(localStorage.getItem("omradefinner") || "null"); if (s && s.krav) tilstand = Object.assign(tilstand, s, { krav: Object.assign(tilstand.krav, s.krav) }); } catch (e) {}
   function lagre() { try { localStorage.setItem("omradefinner", JSON.stringify(tilstand)); } catch (e) {} }
@@ -260,7 +282,7 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
     el("kilder").textContent = "Kilder: " + D.kilder.join(" · ") + ". Befolkning per " + D.befolkningsaar + ", data hentet " + D.laget + ".";
     el("status").hidden = true;
     el("bakgrunn").setAttribute("aria-pressed", tilstand.bakgrunn !== false);
-    byggPanel(); tilpass(); hjem(); beregn();
+    byggPanel(); byggBoligfilter(); tilpass(); hjem(); beregn();
   }
   function minIkkeNull(a, b) { return a == null ? b : b == null ? a : Math.min(a, b); }
   function tilUtmRinger(g) {
@@ -309,7 +331,7 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
     el("sRuter").textContent = ant.toLocaleString("nb-NO");
     el("sBosatte").textContent = bos.toLocaleString("nb-NO");
     el("sOmr").textContent = klynger.length.toLocaleString("nb-NO");
-    visTreff(); legende(); tegn(); if (valgt >= 0) visDetalj(valgt); lagre();
+    visTreff(); legende(); tegn(); if (valgt >= 0) visDetalj(valgt, true); lagre();
   }
   function finnKlynger() {
     const sett = new Uint8Array(n); klynger = []; klyngeAv = new Int32Array(n).fill(-1);
@@ -336,6 +358,34 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
     klynger.forEach((k, ki) => k.ruter.forEach(j => klyngeAv[j] = ki));
   }
 
+  // ---------- boligfilter for FINN ----------
+  // Koder for boligtype: 1 = Enebolig er bekreftet mot finn.no; de andre er ikke verifisert ennå.
+  const BOLIGTYPER = [["1", "Enebolig"], ["4", "Tomannsbolig"], ["2", "Rekkehus"], ["3", "Leilighet"], ["5", "Gårdsbruk/småbruk"]];
+  function finnFilter() {
+    const f = tilstand.finn || {}, q = [];
+    (f.typer || []).forEach(t => q.push("property_type=" + t));
+    const mill = v => v === "" || v == null || isNaN(+v) || +v <= 0 ? null : Math.round(+v * 1e6);
+    const hel = v => v === "" || v == null || isNaN(+v) || +v <= 0 ? null : Math.round(+v);
+    [["price_from", mill(f.prisFra)], ["price_to", mill(f.prisTil)], ["area_from", hel(f.arealFra)], ["area_to", hel(f.arealTil)],
+     ["min_bedrooms", hel(f.soverom)], ["plot_area_from", hel(f.tomtFra)]].forEach(([k, v]) => { if (v != null) q.push(k + "=" + v); });
+    return q.length ? "&" + q.join("&") : "";
+  }
+  function byggBoligfilter() {
+    const f = tilstand.finn = Object.assign({ typer: [] }, tilstand.finn);
+    const chips = el("bTyper");
+    chips.innerHTML = BOLIGTYPER.map(([k, navn]) => `<button type="button" data-k="${k}" aria-pressed="${f.typer.includes(k)}">${navn}</button>`).join("");
+    chips.querySelectorAll("button").forEach(b => b.onclick = () => {
+      const k = b.dataset.k; f.typer = f.typer.includes(k) ? f.typer.filter(x => x !== k) : f.typer.concat(k);
+      b.setAttribute("aria-pressed", f.typer.includes(k)); oppdaterLenker();
+    });
+    [["bPrisFra", "prisFra"], ["bPrisTil", "prisTil"], ["bArealFra", "arealFra"], ["bArealTil", "arealTil"], ["bSoverom", "soverom"], ["bTomtFra", "tomtFra"]].forEach(([id, k]) => {
+      const inp = el(id); inp.value = f[k] != null ? f[k] : "";
+      inp.addEventListener(inp.tagName === "SELECT" ? "change" : "input", () => { f[k] = inp.value; oppdaterLenker(); });
+    });
+  }
+  let lenkeTid;
+  function oppdaterLenker() { lagre(); clearTimeout(lenkeTid); lenkeTid = setTimeout(() => { visTreff(); if (valgt >= 0) visDetalj(valgt, true); }, 250); }
+
   // ---------- FINN-lenke: omriss (konveks innhylling) rundt rutene, som polylocation ----------
   function finnLenke(ruter, kant) {
     const pk = [];
@@ -348,7 +398,7 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
     for (let i = pk.length - 1; i >= 0; i--) { const q = pk[i]; while (opp.length >= 2 && kryss(opp[opp.length - 2], opp[opp.length - 1], q) <= 0) opp.pop(); opp.push(q); }
     const hull = ned.slice(0, -1).concat(opp.slice(0, -1)); hull.push(hull[0]);
     const tekst = hull.map(([x, y]) => { const [lo, la] = utmInv(x, y); return lo.toFixed(5) + " " + la.toFixed(5); }).join(",");
-    return "https://www.finn.no/realestate/homes/search.html?polylocation=" + encodeURIComponent(tekst).replace(/%20/g, "+");
+    return "https://www.finn.no/realestate/homes/search.html?polylocation=" + encodeURIComponent(tekst).replace(/%20/g, "+") + finnFilter();
   }
 
   // ---------- panel ----------
@@ -414,7 +464,7 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
     const t = gange ? ` · ${Math.round(m / GANG)} min` : "";
     return (m < 1000 ? Math.round(m / 10) * 10 + " m" : (m / 1000).toFixed(1).replace(".", ",") + " km") + t;
   }
-  function visDetalj(i) {
+  function visDetalj(i, stille) {
     valgt = i; const R = D.ruter; const km = kommuner[R.kommune[i]];
     const reiser = (D.maal || []).map(m => ["Kollektiv til " + m.navn, R.reise && R.reise[m.id] && R.reise[m.id][i] != null ? R.reise[m.id][i] + " min" : "over 2 t",
       tilstand.krav.reise && tilstand.krav.reise.maal === m.id ? "reise" : null]);
@@ -444,7 +494,7 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
       <div class="lenker">${klyngeAv[i] >= 0 ? `<a class="lenke" href="${finnLenke(klynger[klyngeAv[i]].ruter, 75)}" target="_blank" rel="noopener">Se boliger i hele treffområdet på FINN</a>` : ""}
       <a class="lenke${klyngeAv[i] >= 0 ? " sekundær" : ""}" href="${finnLenke([i], 375)}" target="_blank" rel="noopener">Se boliger rundt denne ruta på FINN (ca. 1 km²)</a></div>
       <p class="tom">Kollektiv er median reisetid ved avreise 07–08 en tirsdag${D.reisedag ? " (" + D.reisedag + ")" : ""}, med gange til og fra holdeplass. Inntekt er median inntekt etter skatt for alle husholdninger (2024). Gangtid går langs veier og stier fra midten av ruta.</p>`;
-    fane("tDet"); tegn();
+    if (!stille) fane("tDet"); tegn();
   }
 
   // ---------- kart ----------
