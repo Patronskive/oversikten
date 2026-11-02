@@ -19,9 +19,10 @@
   --line: #D8E0DA;
   --accent: #2F6B4F;
   --accent-ink: #FFFFFF;
-  --match: #2E8A57;
-  --near: #D0952A;
-  --miss: rgba(86, 100, 93, 0.16);
+  --match: #1E5FD0;
+  --match-kant: #0B2F75;
+  --near: #F2AE33;
+  --miss: rgba(86, 100, 93, 0.09);
   --land: #E3E9E2;
   --void: #D5DDDA;
   --border: #9AA8A0;
@@ -31,13 +32,13 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #101613; --surface: #17201B; --ink: #E3EBE6; --muted: #98A8A0; --line: #2A3631;
-    --accent: #5DBA88; --accent-ink: #0E1512; --match: #4FB57D; --near: #E0AE4E; --miss: rgba(152, 168, 160, 0.14);
+    --accent: #5DBA88; --accent-ink: #0E1512; --match: #4A8EF7; --match-kant: #DCE9FF; --near: #F7BE4F; --miss: rgba(152, 168, 160, 0.07);
     --land: #1B2420; --void: #0C110F; --border: #4E5C55; --sel: #F2F6F3; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #101613; --surface: #17201B; --ink: #E3EBE6; --muted: #98A8A0; --line: #2A3631;
-  --accent: #5DBA88; --accent-ink: #0E1512; --match: #4FB57D; --near: #E0AE4E; --miss: rgba(152, 168, 160, 0.14);
+  --accent: #5DBA88; --accent-ink: #0E1512; --match: #4A8EF7; --match-kant: #DCE9FF; --near: #F7BE4F; --miss: rgba(152, 168, 160, 0.07);
   --land: #1B2420; --void: #0C110F; --border: #4E5C55; --sel: #F2F6F3; color-scheme: dark;
 }
 html, body { height: 100%; }
@@ -554,11 +555,27 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
           if (x < x0 || x > x1 || y < y0 || y > y1) continue;
           ctx.fillRect(sx(x), sy(y + 250), s, s);
         }
-        if (st === 0 && medKart) ctx.globalAlpha = skala > 0.02 ? 0.6 : 0.8;
+        if (st === 0 && medKart) ctx.globalAlpha = skala > 0.02 ? 0.72 : 0.85;
       }
       ctx.globalAlpha = 1;
+      // kant rundt treffruter, så de skiller seg på form og ikke bare farge
+      if (s >= 4) {
+        ctx.strokeStyle = css("--match-kant"); ctx.lineWidth = s >= 12 ? 1.5 : 1;
+        ctx.beginPath();
+        for (let i = 0; i < n; i++) {
+          if (status[i] !== 2) continue; const x = IX[i] * 250, y = IY[i] * 250;
+          if (x < x0 || x > x1 || y < y0 || y > y1) continue;
+          const ix = IX[i], iy = IY[i], X0 = sx(x), Y0 = sy(y + 250), X1 = X0 + s, Y1 = Y0 + s;
+          const t = (dx, dy) => { const k = rutekart.get((ix + dx) * 100000 + iy + dy); return k != null && status[k] === 2; };
+          if (!t(0, 1)) { ctx.moveTo(X0, Y0); ctx.lineTo(X1, Y0); }
+          if (!t(0, -1)) { ctx.moveTo(X0, Y1); ctx.lineTo(X1, Y1); }
+          if (!t(-1, 0)) { ctx.moveTo(X0, Y0); ctx.lineTo(X0, Y1); }
+          if (!t(1, 0)) { ctx.moveTo(X1, Y0); ctx.lineTo(X1, Y1); }
+        }
+        ctx.stroke();
+      }
     } else {
-      const l = LAG.find(a => a.id === tilstand.lag); const v = l.maal ? R.reise[l.maal] : R[l.felt]; const aks = css("--accent"), miss = css("--miss");
+      const l = LAG.find(a => a.id === tilstand.lag); const v = l.maal ? R.reise[l.maal] : R[l.felt]; const aks = css("--match"), miss = css("--miss");
       ctx.globalAlpha = 1;
       for (let i = 0; i < n; i++) {
         const x = IX[i] * 250, y = IY[i] * 250; if (x < x0 || x > x1 || y < y0 || y > y1) continue;
@@ -641,9 +658,9 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
 
   function legende() {
     const L = el("legende");
-    if (tilstand.modus === "krit") L.innerHTML = `<span><i style="background:var(--match)"></i>Alle krav</span><span><i style="background:var(--near)"></i>Bommer på ett</span><span><i style="background:var(--miss);outline:1px solid var(--line)"></i>Flere</span>`;
+    if (tilstand.modus === "krit") L.innerHTML = `<span><i style="background:var(--match);outline:1.5px solid var(--match-kant);outline-offset:-1.5px"></i>Alle krav</span><span><i style="background:var(--near)"></i>Bommer på ett</span><span><i style="background:transparent;outline:1px solid var(--line)"></i>Flere</span>`;
     else { const l = LAG.find(a => a.id === tilstand.lag); const svak = l.nær ? "Langt unna" : "Lavt", sterk = l.nær ? "Nært" : "Høyt";
-      L.innerHTML = `<span><i style="background:var(--accent);opacity:.18"></i>${svak}</span><span><i style="background:var(--accent)"></i>${sterk}</span><span><i style="background:var(--miss);outline:1px solid var(--line)"></i>Mangler</span>`; }
+      L.innerHTML = `<span><i style="background:var(--match);opacity:.18"></i>${svak}</span><span><i style="background:var(--match)"></i>${sterk}</span><span><i style="background:var(--miss);outline:1px solid var(--line)"></i>Mangler</span>`; }
   }
 
   // panorering, zoom og trykk
