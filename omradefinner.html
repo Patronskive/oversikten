@@ -112,6 +112,7 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
 .detalj dt { color: var(--muted); }
 .detalj dd { margin: 0; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
 .detalj dd.nei { color: var(--near); }
+.detalj dd .t2 { display: block; font-weight: 400; font-size: 12px; color: var(--muted); }
 .detalj h3 { margin: 0; font-size: 18px; }
 .lenke { display: inline-flex; align-items: center; justify-content: center; height: 44px; border-radius: 8px; background: var(--accent); color: var(--accent-ink); font-weight: 700; text-decoration: none; padding: 0 14px; }
 .kilder { font-size: 11px; color: var(--muted); line-height: 1.5; }
@@ -137,7 +138,7 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
   <main>
     <div class="kart" id="kart">
       <canvas id="lerret" aria-label="Kart over regionen med 250 meters ruter farget etter kriteriene"></canvas>
-      <div class="status" id="status">Laster data for 29 000 ruter …</div>
+      <div class="status" id="status">Laster data for 45 000 ruter …</div>
       <div class="zoom">
         <button id="inn" aria-label="Zoom inn">+</button>
         <button id="ut" aria-label="Zoom ut">−</button>
@@ -275,6 +276,10 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
     steder = (D.steder || []).map(([navn, rang, lon, lat, folk]) => { const [x, y] = utm(lon, lat); return { navn, rang, x, y, folk }; });
     if (D.maal && D.maal.length && R.reise) {
       KRAV.unshift({ id: "reise", navn: "Reisetid med kollektiv", type: "reise", min: 10, max: 120, steg: 5, std: 45, på: true });
+      if (R.reise_median) {
+        KRAV.splice(1, 0, { id: "vent", navn: "Ventetid på avgang, snitt", type: "reise", min: 2, max: 40, steg: 1, std: 10, på: false, hjelp: "Halvparten av tiden mellom avgangene – lavt betyr hyppige avganger" });
+        if (!tilstand.krav.vent) tilstand.krav.vent = { på: false, v: 10 };
+      }
       if (!tilstand.krav.reise || !D.maal.some(m => m.id === tilstand.krav.reise.maal)) tilstand.krav.reise = { på: true, v: 45, maal: D.maal[0].id };
       D.maal.slice().reverse().forEach(m => LAG.unshift({ id: "r_" + m.id, navn: "Reisetid til " + m.navn, felt: "reise", maal: m.id, type: "reise", maks: 90, nær: true }));
       if (!LAG.some(l => l.id === tilstand.lag)) tilstand.lag = LAG[0].id;
@@ -283,6 +288,11 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
     el("status").hidden = true;
     el("bakgrunn").setAttribute("aria-pressed", tilstand.bakgrunn !== false);
     byggPanel(); byggBoligfilter(); tilpass(); hjem(); beregn();
+  }
+  function vent(maal, i) {
+    const R = D.ruter; if (!R.reise_median || !R.reise_median[maal]) return null;
+    const a = R.reise[maal][i], m = R.reise_median[maal][i];
+    return a == null || m == null ? null : Math.max(0, m - a);
   }
   function minIkkeNull(a, b) { return a == null ? b : b == null ? a : Math.min(a, b); }
   function tilUtmRinger(g) {
@@ -311,6 +321,7 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
     const R = D.ruter, s = tilstand.krav[k.id];
     if (k.id === "tett") return (R.bosatte[i] || 0) >= s.v;
     if (k.id === "reise") { const v = R.reise && R.reise[s.maal] ? R.reise[s.maal][i] : null; return v != null && v <= s.v; }
+    if (k.id === "vent") { const v = vent(tilstand.krav.reise.maal, i); return v != null && v <= s.v; }
     let v = R[k.felt][i];
     if (k.id === "tog" && s.tillegg) v = R.kollektiv[i];
     if (v == null) return false;
@@ -416,6 +427,7 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
       d.innerHTML = `<div class="rad"><label class="navn" for="p_${k.id}"><input type="checkbox" id="p_${k.id}" ${s.på ? "checked" : ""}> ${k.navn}</label><output id="o_${k.id}">${format(k, s.v)}</output></div>
         <input type="range" id="r_${k.id}" min="${k.min}" max="${k.max}" step="${k.steg}" value="${s.v}" aria-label="${k.navn}">
         ${k.id === "reise" ? `<label class="tillegg" for="m_reise">til <select id="m_reise" style="height:32px;width:auto;flex:1">${D.maal.map(m => `<option value="${m.id}" ${m.id === s.maal ? "selected" : ""}>${m.navn}</option>`).join("")}</select></label>` : ""}
+        ${k.id === "vent" ? `<span class="tillegg">${k.hjelp} (samme mål som over)</span>` : ""}
         ${k.tillegg ? `<label class="tillegg" for="t_${k.id}"><input type="checkbox" id="t_${k.id}" ${s.tillegg ? "checked" : ""}> ${k.tillegg}</label>` : ""}`;
       boks.appendChild(d);
       let tid;
@@ -467,7 +479,8 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
   }
   function visDetalj(i, stille) {
     valgt = i; const R = D.ruter; const km = kommuner[R.kommune[i]];
-    const reiser = (D.maal || []).map(m => ["Kollektiv til " + m.navn, R.reise && R.reise[m.id] && R.reise[m.id][i] != null ? R.reise[m.id][i] + " min" : "over 2 t",
+    const reiser = (D.maal || []).map(m => ["Kollektiv til " + m.navn, R.reise && R.reise[m.id] && R.reise[m.id][i] != null
+        ? R.reise[m.id][i] + " min" + (vent(m.id, i) != null ? ` <span class="t2">+ ca. ${vent(m.id, i)} min venting</span>` : "") : (R.reise_median ? "over 2½ t" : "over 2 t"),
       tilstand.krav.reise && tilstand.krav.reise.maal === m.id ? "reise" : null]);
     const rader = [
       ...reiser,
@@ -494,7 +507,7 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
       return `<dt>${a}</dt><dd class="${nei ? "nei" : ""}">${b}</dd>`; }).join("")}</dl>
       <div class="lenker">${klyngeAv[i] >= 0 ? `<a class="lenke" href="${finnLenke(klynger[klyngeAv[i]].ruter, 75)}" target="_blank" rel="noopener">Se boliger i hele treffområdet på FINN</a>` : ""}
       <a class="lenke${klyngeAv[i] >= 0 ? " sekundær" : ""}" href="${finnLenke([i], 375)}" target="_blank" rel="noopener">Se boliger rundt denne ruta på FINN (ca. 1 km²)</a></div>
-      <p class="tom">Kollektiv er median reisetid ved avreise 07–08 en tirsdag${D.reisedag ? " (" + D.reisedag + ")" : ""}, med gange til og fra holdeplass. Inntekt er median inntekt etter skatt for alle husholdninger (2024). Gangtid går langs veier og stier fra midten av ruta.</p>`;
+      <p class="tom">${R.reise_median ? "Kollektiv er raskeste reise når du tar riktig avgang mellom 07 og 08 en tirsdag" : "Kollektiv er median reisetid ved avreise 07–08 en tirsdag"}${D.reisedag ? " (" + D.reisedag + ")" : ""}, med gange til og fra holdeplass.${R.reise_median ? " Venting er snittet ekstra hvis du går hjemmefra på et tilfeldig tidspunkt – et mål på hvor ofte det går." : ""} Inntekt er median inntekt etter skatt for alle husholdninger (2024). Gangtid går langs veier og stier fra midten av ruta.</p>`;
     if (!stille) fane("tDet"); tegn();
   }
 
