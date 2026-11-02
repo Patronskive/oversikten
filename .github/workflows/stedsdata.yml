@@ -49,7 +49,7 @@ jobs:
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq osmium-tool
           curl -sSfL -o norway.osm.pbf https://download.geofabrik.de/europe/norway-latest.osm.pbf
-          osmium extract -b 9.9,58.7,12.6,60.55 norway.osm.pbf -o region.osm.pbf --overwrite
+          osmium extract -b 9.2,58.7,12.6,60.55 norway.osm.pbf -o region.osm.pbf --overwrite
           rm norway.osm.pbf
           python osm_avstander.py region.osm.pbf
       - name: Stedsnavn og delområdenavn
@@ -58,7 +58,7 @@ jobs:
           if [ ! -f region.osm.pbf ]; then
             sudo apt-get update -qq && sudo apt-get install -y -qq osmium-tool
             curl -sSfL -o norway.osm.pbf https://download.geofabrik.de/europe/norway-latest.osm.pbf
-            osmium extract -b 9.9,58.7,12.6,60.55 norway.osm.pbf -o region.osm.pbf --overwrite
+            osmium extract -b 9.2,58.7,12.6,60.55 norway.osm.pbf -o region.osm.pbf --overwrite
             rm norway.osm.pbf
           fi
           osmium tags-filter region.osm.pbf n/place=city,town,village,suburb,quarter,neighbourhood,hamlet -o steder.osm.pbf --overwrite
@@ -70,7 +70,7 @@ jobs:
           if [ ! -f region.osm.pbf ]; then
             sudo apt-get update -qq && sudo apt-get install -y -qq osmium-tool
             curl -sSfL -o norway.osm.pbf https://download.geofabrik.de/europe/norway-latest.osm.pbf
-            osmium extract -b 9.9,58.7,12.6,60.55 norway.osm.pbf -o region.osm.pbf --overwrite
+            osmium extract -b 9.2,58.7,12.6,60.55 norway.osm.pbf -o region.osm.pbf --overwrite
             rm norway.osm.pbf
           fi
           curl -sSfL -o gtfs.zip https://storage.googleapis.com/marduk-production/outbound/gtfs/rb_norway-aggregated-gtfs.zip

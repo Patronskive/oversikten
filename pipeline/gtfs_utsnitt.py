@@ -9,7 +9,7 @@ import zipfile
 
 import pandas as pd
 
-BOKS = (9.9, 58.7, 12.6, 60.55)
+BOKS = (9.2, 58.7, 12.6, 60.55)
 
 
 def les(z, navn):
