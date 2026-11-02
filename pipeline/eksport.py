@@ -78,10 +78,11 @@ def main():
             steder = []
         aar = conn.execute("select max(aar) from rute250").fetchone()[0]
         mål = conn.execute("select id, navn from reisemal where aktiv order by rekkefolge").fetchall()
-        reise = {}
-        for mid, ssbid, minutter in conn.execute(
-                "select maal_id, ssbid, minutter from rute_reisetid t join reisemal m on m.id = t.maal_id where m.aktiv"):
+        reise, reise_med = {}, {}
+        for mid, ssbid, minutter, median in conn.execute(
+                "select maal_id, ssbid, minutter, minutter_median from rute_reisetid t join reisemal m on m.id = t.maal_id where m.aktiv"):
             reise.setdefault(mid, {})[ssbid] = minutter
+            reise_med.setdefault(mid, {})[ssbid] = median
         reisedag = conn.execute("select max(beregnet_for) from rute_reisetid").fetchone()[0]
 
     data = {
@@ -102,7 +103,8 @@ def main():
         "grunnkretser": [r[1] for r in gk_rader],
         "steder": [[r[0], r[1], float(r[2]), float(r[3]), r[4]] for r in steder],
         "ruter": {"lon": [], "lat": [], "bosatte": [], "kommune": [], "delomrade": [], "grunnkrets": [], "barn_pst": [],
-                  **{f: [] for f in FELT}, "reise": {m[0]: [] for m in mål if m[0] in reise}},
+                  **{f: [] for f in FELT}, "reise": {m[0]: [] for m in mål if m[0] in reise},
+                  "reise_median": {m[0]: [] for m in mål if m[0] in reise}},
     }
     R = data["ruter"]
     for r in ruter:
@@ -118,6 +120,7 @@ def main():
             R[f].append(v)
         for mid, liste in R["reise"].items():
             liste.append(reise[mid].get(r[0]))
+            R["reise_median"][mid].append(reise_med[mid].get(r[0]))
 
     os.makedirs(os.path.dirname(os.path.abspath(ut)), exist_ok=True)
     with open(ut, "w", encoding="utf-8") as f:

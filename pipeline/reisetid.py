@@ -3,8 +3,10 @@
 Bruk: python reisetid.py region.osm.pbf gtfs.zip [--max-memory 13G]
 Kilder: Entur GTFS for hele Norge (NLOD), OpenStreetMap (ODbL).
 
-Reisetid = median over avreiser hvert minutt mellom 07:00 og 08:00 en tirsdag minst en uke fram,
-inkludert gange til og fra holdeplass (4,8 km/t). Over 120 minutter lagres som tom verdi.
+For avreiser hvert minutt mellom 07:00 og 08:00 en tirsdag minst en uke fram lagres
+- minutter: raskeste reise (1. persentil) = reisetid når du tar riktig avgang, uten venting hjemme
+- minutter_median: median, som også tar med ventetid til neste avgang (sier noe om hvor ofte det går)
+Begge inkluderer gange til og fra holdeplass (4,8 km/t). Over 150 minutter lagres som tom verdi.
 """
 import datetime as dt
 import os
@@ -18,6 +20,7 @@ from shapely.geometry import Point
 from ssb_rutenett import koble_til
 
 BATCH = 2000
+VERSJON = 2  # 2 = raskeste + median
 FILER = [a for a in sys.argv[1:] if not a.startswith("--") and not a.endswith("G")]
 
 
@@ -50,9 +53,9 @@ def main():
                    extensions.st_y(extensions.st_transform(extensions.st_centroid(r.geom), 4326))
             from rute250 r
             where (select count(*) from rute_reisetid t join reisemal m on m.id = t.maal_id
-                   where t.ssbid = r.ssbid and m.aktiv and t.beregnet_for >= %s - 60) < %s
+                   where t.ssbid = r.ssbid and m.aktiv and t.beregnet_for >= %s - 60 and t.versjon >= %s) < %s
             order by r.ssbid
-        """, (dag, len(mål))).fetchall()
+        """, (dag, VERSJON, len(mål))).fetchall()
 
     if not ruter:
         print("Alle ruter har ferske reisetider")
@@ -78,18 +81,25 @@ def main():
             departure=avreise,
             departure_time_window=dt.timedelta(hours=1),
             transport_modes=[r5py.TransportMode.TRANSIT, r5py.TransportMode.WALK],
-            max_time=dt.timedelta(minutes=120),
+            max_time=dt.timedelta(minutes=150),
+            percentiles=[1, 50],
             speed_walking=4.8,
             snap_to_network=500,
         )
         df = ttm.compute_travel_times() if hasattr(ttm, "compute_travel_times") else pd.DataFrame(ttm)
-        tid_kol = "travel_time" if "travel_time" in df.columns else [c for c in df.columns if c not in ("from_id", "to_id")][0]
-        rader = [(r.from_id, r.to_id, None if pd.isna(getattr(r, tid_kol)) else int(getattr(r, tid_kol)), dag)
-                 for r in df.itertuples(index=False)]
+        tidkol = [c for c in df.columns if c not in ("from_id", "to_id")]
+        if s == 0:
+            print(f"  kolonner: {list(df.columns)}", flush=True)
+        rask = next((c for c in tidkol if c.endswith("_p1") or c.endswith("_p01")), tidkol[0])
+        med = next((c for c in tidkol if c.endswith("_p50")), tidkol[-1])
+        tall = lambda v: None if pd.isna(v) else int(v)
+        rader = [(r["from_id"], r["to_id"], tall(r[rask]), tall(r[med]), dag, VERSJON) for r in df.to_dict("records")]
+        tid_kol = rask
         with koble_til(url) as conn, conn.cursor() as cur:
             cur.executemany(
-                """insert into rute_reisetid (ssbid, maal_id, minutter, beregnet_for) values (%s, %s, %s, %s)
-                   on conflict (ssbid, maal_id) do update set minutter = excluded.minutter, beregnet_for = excluded.beregnet_for""",
+                """insert into rute_reisetid (ssbid, maal_id, minutter, minutter_median, beregnet_for, versjon) values (%s, %s, %s, %s, %s, %s)
+                   on conflict (ssbid, maal_id) do update set minutter = excluded.minutter, minutter_median = excluded.minutter_median,
+                     beregnet_for = excluded.beregnet_for, versjon = excluded.versjon""",
                 rader,
             )
             conn.commit()
@@ -97,12 +107,12 @@ def main():
         print(f"  {s + len(del_)}/{len(ruter)} ruter ferdig ({time.time() - t0:.0f} s for denne bunken)", flush=True)
         for m in mål:
             v = df.loc[df["to_id"] == m[0], tid_kol]
-            print(f"    {m[1]}: median {v.median():.0f} min, {v.notna().mean() * 100:.0f} % innen 120 min", flush=True)
+            print(f"    {m[1]}: median {v.median():.0f} min, {v.notna().mean() * 100:.0f} % innen 150 min (raskeste)", flush=True)
 
     with koble_til(url) as conn:
         conn.execute(
             "insert into kilde_logg (kilde, datasett, rader, merknad) values (%s, %s, %s, %s)",
-            ("Entur GTFS + OSM (r5py)", "Reisetid kollektiv", totalt, f"Avreise 07–08 {dag.isoformat()}"),
+            ("Entur GTFS + OSM (r5py)", "Reisetid kollektiv", totalt, f"Avreise 07–08 {dag.isoformat()}, raskeste og median"),
         )
         conn.commit()
     print(f"Ferdig: {totalt} reisetider lagret")
