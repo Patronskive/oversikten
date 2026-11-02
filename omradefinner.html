@@ -105,9 +105,9 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
 }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
 </style>
-
 </head>
 <body>
+
 <div class="app">
   <header>
     <div style="display:flex;align-items:center;gap:12px"><a href="./" style="color:var(--muted);text-decoration:none;font-weight:600;padding:8px 0">‹ Johans guide</a><h1>Områdefinner</h1></div>
@@ -226,6 +226,12 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
     R.kollektiv = R.tog.map((t, i) => minIkkeNull(t, R.tbane[i]));
     R.inntekt = R.delomrade.map(d => d == null ? null : D.delomrader[d].inntekt);
     kommuner = D.kommuner.map(k => ({ navn: k.navn, nr: k.nr, inntekt: k.inntekt, ringer: tilUtmRinger(k.geom) }));
+    if (D.maal && D.maal.length && R.reise) {
+      KRAV.unshift({ id: "reise", navn: "Reisetid med kollektiv", type: "reise", min: 10, max: 120, steg: 5, std: 45, på: true });
+      if (!tilstand.krav.reise || !D.maal.some(m => m.id === tilstand.krav.reise.maal)) tilstand.krav.reise = { på: true, v: 45, maal: D.maal[0].id };
+      D.maal.slice().reverse().forEach(m => LAG.unshift({ id: "r_" + m.id, navn: "Reisetid til " + m.navn, felt: "reise", maal: m.id, type: "reise", maks: 90, nær: true }));
+      if (!LAG.some(l => l.id === tilstand.lag)) tilstand.lag = LAG[0].id;
+    }
     el("kilder").textContent = "Kilder: " + D.kilder.join(" · ") + ". Befolkning per " + D.befolkningsaar + ", data hentet " + D.laget + ".";
     el("status").hidden = true;
     byggPanel(); tilpass(); hjem(); beregn();
@@ -242,6 +248,7 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
   function oppfylt(k, i) {
     const R = D.ruter, s = tilstand.krav[k.id];
     if (k.id === "tett") return (R.bosatte[i] || 0) >= s.v;
+    if (k.id === "reise") { const v = R.reise && R.reise[s.maal] ? R.reise[s.maal][i] : null; return v != null && v <= s.v; }
     let v = R[k.felt][i];
     if (k.id === "tog" && s.tillegg) v = R.kollektiv[i];
     if (v == null) return false;
@@ -286,7 +293,7 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
 
   // ---------- panel ----------
   function format(k, v) {
-    if (k.type === "min") return v + " min";
+    if (k.type === "min" || k.type === "reise") return v + " min";
     if (k.type === "km") return (v < 1 ? Math.round(v * 1000) + " m" : String(v).replace(".", ",") + " km");
     return v + " pers.";
   }
@@ -297,6 +304,7 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
       const d = document.createElement("div"); d.className = "krav" + (s.på ? "" : " av");
       d.innerHTML = `<div class="rad"><label class="navn" for="p_${k.id}"><input type="checkbox" id="p_${k.id}" ${s.på ? "checked" : ""}> ${k.navn}</label><output id="o_${k.id}">${format(k, s.v)}</output></div>
         <input type="range" id="r_${k.id}" min="${k.min}" max="${k.max}" step="${k.steg}" value="${s.v}" aria-label="${k.navn}">
+        ${k.id === "reise" ? `<label class="tillegg" for="m_reise">til <select id="m_reise" style="height:32px;width:auto;flex:1">${D.maal.map(m => `<option value="${m.id}" ${m.id === s.maal ? "selected" : ""}>${m.navn}</option>`).join("")}</select></label>` : ""}
         ${k.tillegg ? `<label class="tillegg" for="t_${k.id}"><input type="checkbox" id="t_${k.id}" ${s.tillegg ? "checked" : ""}> ${k.tillegg}</label>` : ""}`;
       boks.appendChild(d);
       let tid;
@@ -306,6 +314,7 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
       });
       d.querySelector("#p_" + k.id).addEventListener("change", e => { s.på = e.target.checked; d.classList.toggle("av", !s.på); beregn(); });
       if (k.tillegg) d.querySelector("#t_" + k.id).addEventListener("change", e => { s.tillegg = e.target.checked; beregn(); });
+      if (k.id === "reise") d.querySelector("#m_reise").addEventListener("change", e => { s.maal = e.target.value; beregn(); });
     });
     const sel = el("lag"); sel.innerHTML = LAG.map(l => `<option value="${l.id}">${l.navn}</option>`).join(""); sel.value = tilstand.lag;
     sel.addEventListener("change", () => { tilstand.lag = sel.value; legende(); tegn(); lagre(); });
@@ -346,7 +355,10 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
   }
   function visDetalj(i) {
     valgt = i; const R = D.ruter; const km = kommuner[R.kommune[i]];
+    const reiser = (D.maal || []).map(m => ["Kollektiv til " + m.navn, R.reise && R.reise[m.id] && R.reise[m.id][i] != null ? R.reise[m.id][i] + " min" : "over 2 t",
+      tilstand.krav.reise && tilstand.krav.reise.maal === m.id ? "reise" : null]);
     const rader = [
+      ...reiser,
       ["Bosatte i ruta", (R.bosatte[i] || 0) + " pers.", "tett"],
       ["Tog", tekstAvstand(R.tog[i], true), "tog"],
       ["T-bane", tekstAvstand(R.tbane[i], true), null],
@@ -366,7 +378,7 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
       const k = kid && KRAV.find(x => x.id === kid); const nei = k && tilstand.krav[kid].på && !oppfylt(k, i);
       return `<dt>${a}</dt><dd class="${nei ? "nei" : ""}">${b}</dd>`; }).join("")}</dl>
       <a class="lenke" href="https://www.finn.no/realestate/homes/search.html?q=${encodeURIComponent(km ? km.navn : "")}" target="_blank" rel="noopener">Se boliger i ${km ? km.navn : "kommunen"} på FINN</a>
-      <p class="tom">Inntekt er median inntekt etter skatt for alle husholdninger (${"2024"}). Gangtid går langs veier og stier fra midten av ruta.</p>`;
+      <p class="tom">Kollektiv er median reisetid ved avreise 07–08 en tirsdag${D.reisedag ? " (" + D.reisedag + ")" : ""}, med gange til og fra holdeplass. Inntekt er median inntekt etter skatt for alle husholdninger (2024). Gangtid går langs veier og stier fra midten av ruta.</p>`;
     fane("tDet"); tegn();
   }
 
@@ -412,13 +424,14 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
         }
       }
     } else {
-      const l = LAG.find(a => a.id === tilstand.lag); const v = R[l.felt]; const aks = css("--accent"), miss = css("--miss");
+      const l = LAG.find(a => a.id === tilstand.lag); const v = l.maal ? R.reise[l.maal] : R[l.felt]; const aks = css("--accent"), miss = css("--miss");
       ctx.globalAlpha = 1;
       for (let i = 0; i < n; i++) {
         const x = IX[i] * 250, y = IY[i] * 250; if (x < x0 || x > x1 || y < y0 || y > y1) continue;
         const val = v[i]; if (val == null) { ctx.fillStyle = miss; ctx.globalAlpha = 1; ctx.fillRect(sx(x), sy(y + 250), s, s); continue; }
         let t;
         if (l.type === "min") t = 1 - (val / GANG) / l.maks;
+        else if (l.type === "reise") t = 1 - val / l.maks;
         else if (l.type === "km") t = 1 - (val / 1000) / l.maks;
         else if (l.type === "kr") t = (val - l.min) / (l.maks - l.min);
         else t = val / l.maks;
