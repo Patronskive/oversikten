@@ -40,6 +40,9 @@ body{display:flex;flex-direction:column;max-width:480px;margin:0 auto;min-height
 .tabs{display:flex;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:20;flex-shrink:0;}
 .tab{flex:1;background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;font-size:11px;font-weight:600;padding:11px 4px 9px;display:flex;flex-direction:column;align-items:center;gap:3px;transition:color .15s;}
 .tab.active{border-bottom-color:var(--accent);color:var(--accent);}
+.subtabs{display:flex;gap:6px;padding:12px 16px 0;flex-shrink:0;}
+.subtab{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:999px;color:var(--muted);cursor:pointer;font-size:12px;font-weight:600;padding:7px 8px;display:flex;align-items:center;justify-content:center;gap:5px;}
+.subtab.active{background:var(--accent-dim);border-color:var(--accent-border);color:var(--accent);}
 .content{flex:1;padding:14px 16px 90px;overflow-y:auto;}
 .dep{background:var(--surface);border-radius:13px;padding:12px 14px;display:flex;align-items:center;gap:11px;border:1px solid var(--border);margin-bottom:7px;}
 .dep.soon{border-color:var(--accent-border);}
@@ -104,10 +107,13 @@ body{display:flex;flex-direction:column;max-width:480px;margin:0 auto;min-height
 <div class="tabs">
   <button class="tab active" onclick="setTab('kollektiv')" id="tab-kollektiv"><i class="ti ti-bus"></i>Kollektiv</button>
   <button class="tab" onclick="setTab('mikro')" id="tab-mikro"><i class="ti ti-scooter"></i>Mikro</button>
-  <button class="tab" onclick="setTab('mat')" id="tab-mat"><i class="ti ti-tools-kitchen-2"></i>Spise</button>
-  <button class="tab" onclick="setTab('utforsk')" id="tab-utforsk"><i class="ti ti-compass"></i>Utforsk</button>
-  <button class="tab" onclick="setTab('handel')" id="tab-handel"><i class="ti ti-shopping-cart"></i>Handel</button>
+  <button class="tab" onclick="setTab(lastPlaceTab)" id="tab-steder"><i class="ti ti-map-pin"></i>Steder</button>
   <a class="tab" href="omradefinner.html" style="text-decoration:none"><i class="ti ti-home-search"></i>Bolig</a>
+</div>
+<div class="subtabs" id="subtabs" style="display:none">
+  <button class="subtab active" onclick="setTab('mat')" id="sub-mat"><i class="ti ti-tools-kitchen-2"></i>Spise</button>
+  <button class="subtab" onclick="setTab('utforsk')" id="sub-utforsk"><i class="ti ti-compass"></i>Utforsk</button>
+  <button class="subtab" onclick="setTab('handel')" id="sub-handel"><i class="ti ti-shopping-cart"></i>Handel</button>
 </div>
 <div class="content" id="content">
   <div class="spinner"><span class="sicon">⟳</span><div>Henter posisjon…</div></div>
@@ -129,7 +135,8 @@ let restaurants=[], attractions=[], shops=[];
 let fetchingRestaurants=false, restaurantsFetched=false;
 let fetchingAttractions=false, attractionsFetched=false;
 let fetchingShops=false, shopsFetched=false;
-let curTab="kollektiv", transitRadius=300;
+let curTab="kollektiv", transitRadius=300, lastPlaceTab="mat";
+const PLACE_TABS=["mat","utforsk","handel"];
 
 // ── Helpers ────────────────────────────────────────────────
 function wi(s){if(!s)return"🌤️";const k=Object.keys(WI).find(k=>s.toLowerCase().includes(k));return k?WI[k]:"🌤️";}
@@ -393,8 +400,12 @@ function refresh(){
 
 function setTab(t){
   curTab=t;
+  const isPlace=PLACE_TABS.includes(t);
+  if(isPlace)lastPlaceTab=t;
   document.querySelectorAll(".tab").forEach(el=>el.classList.remove("active"));
-  document.getElementById("tab-"+t).classList.add("active");
+  document.getElementById("tab-"+(isPlace?"steder":t)).classList.add("active");
+  document.getElementById("subtabs").style.display=isPlace?"flex":"none";
+  document.querySelectorAll(".subtab").forEach(el=>el.classList.toggle("active",el.id==="sub-"+t));
   if(t==="mat"&&!restaurantsFetched&&!fetchingRestaurants&&loc)fetchRestaurants();
   else if(t==="utforsk"&&!attractionsFetched&&!fetchingAttractions&&loc)fetchAttractions();
   else if(t==="handel"&&!shopsFetched&&!fetchingShops&&loc)fetchShops();
@@ -444,7 +455,7 @@ function renderContent(){
 
   if(curTab==="kollektiv"){
     if(loc&&!isInNorway(loc.lat,loc.lon)){
-      setContent(`<div class="empty"><div class="eicon">🌍</div><div style="font-weight:700;margin-bottom:6px">Kollektivdata er foreløpig kun tilgjengelig i Norge</div><div style="font-size:13px">Du er utenfor dekningsområdet til Entur. Prøv Spise, Utforsk eller Handel i stedet — de fungerer globalt.</div></div>`);
+      setContent(`<div class="empty"><div class="eicon">🌍</div><div style="font-weight:700;margin-bottom:6px">Kollektivdata er foreløpig kun tilgjengelig i Norge</div><div style="font-size:13px">Du er utenfor dekningsområdet til Entur. Prøv Steder-fanen i stedet — den fungerer globalt.</div></div>`);
       return;
     }
     const rbar=`<div class="radius-bar"><span class="radius-label">Radius:</span><button class="rbtn${transitRadius===300?" active":""}" onclick="setRadius(300)">300m</button><button class="rbtn${transitRadius===500?" active":""}" onclick="setRadius(500)">500m</button><button class="rbtn${transitRadius===1000?" active":""}" onclick="setRadius(1000)">1 km</button><button class="rbtn${transitRadius===2000?" active":""}" onclick="setRadius(2000)">2 km</button></div>`;
