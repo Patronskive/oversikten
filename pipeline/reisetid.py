@@ -45,17 +45,28 @@ def main():
     if not url:
         sys.exit("Mangler SUPABASE_DB_URL")
     with koble_til(url) as conn:
-        mål = conn.execute("select id, navn, lon, lat from reisemal where aktiv order by rekkefolge").fetchall()
+        alle_mål = conn.execute("select id, navn, lon, lat from reisemal where aktiv order by rekkefolge").fetchall()
+        uten = [m[1] for m in alle_mål if m[2] is None or m[3] is None]
+        if uten:
+            print(f"Hopper over mål uten koordinater: {', '.join(uten)}")
         dag = reisedag()
+        antall_ruter = conn.execute("select count(*) from rute250").fetchone()[0]
+        ferdige = dict(conn.execute("""select maal_id, count(*) from rute_reisetid
+                                       where beregnet_for >= %s - 60 and versjon >= %s group by 1""", (dag, VERSJON)).fetchall())
+        # bare mål som mangler tider regnes (raskere når nye mål legges til)
+        mål = [m for m in alle_mål if m[2] is not None and m[3] is not None and ferdige.get(m[0], 0) < antall_ruter]
+        if not mål:
+            print("Alle ruter har ferske reisetider")
+            return
         ruter = conn.execute("""
             select r.ssbid,
                    extensions.st_x(extensions.st_transform(extensions.st_centroid(r.geom), 4326)),
                    extensions.st_y(extensions.st_transform(extensions.st_centroid(r.geom), 4326))
             from rute250 r
-            where (select count(*) from rute_reisetid t join reisemal m on m.id = t.maal_id
-                   where t.ssbid = r.ssbid and m.aktiv and t.beregnet_for >= %s - 60 and t.versjon >= %s) < %s
+            where (select count(*) from rute_reisetid t
+                   where t.ssbid = r.ssbid and t.maal_id = any(%s) and t.beregnet_for >= %s - 60 and t.versjon >= %s) < %s
             order by r.ssbid
-        """, (dag, VERSJON, len(mål))).fetchall()
+        """, ([m[0] for m in mål], dag, VERSJON, len(mål))).fetchall()
 
     if not ruter:
         print("Alle ruter har ferske reisetider")

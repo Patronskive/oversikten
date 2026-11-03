@@ -73,6 +73,8 @@ jobs:
             osmium extract -b 9.2,58.7,12.6,60.55 norway.osm.pbf -o region.osm.pbf --overwrite
             rm norway.osm.pbf
           fi
+          command -v osmium >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq osmium-tool)
+          python -u geokod.py region.osm.pbf
           curl -sSfL -o gtfs.zip https://storage.googleapis.com/marduk-production/outbound/gtfs/rb_norway-aggregated-gtfs.zip
           python gtfs_utsnitt.py gtfs.zip gtfs_region.zip
           rm gtfs.zip
