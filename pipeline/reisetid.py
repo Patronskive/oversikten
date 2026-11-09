@@ -21,6 +21,7 @@ from ssb_rutenett import koble_til
 
 BATCH = 2000
 VERSJON = 2  # 2 = raskeste + median
+FERSK_DAGER = 30  # eldre reisetider regnes på nytt (nye rutetider kommer jevnlig)
 FILER = [a for a in sys.argv[1:] if not a.startswith("--") and not a.endswith("G")]
 
 
@@ -52,7 +53,7 @@ def main():
         dag = reisedag()
         antall_ruter = conn.execute("select count(*) from rute250").fetchone()[0]
         ferdige = dict(conn.execute("""select maal_id, count(*) from rute_reisetid
-                                       where beregnet_for >= %s - 60 and versjon >= %s group by 1""", (dag, VERSJON)).fetchall())
+                                       where beregnet_for >= %s - %s and versjon >= %s group by 1""", (dag, FERSK_DAGER, VERSJON)).fetchall())
         # bare mål som mangler tider regnes (raskere når nye mål legges til)
         mål = [m for m in alle_mål if m[2] is not None and m[3] is not None and ferdige.get(m[0], 0) < antall_ruter]
         if not mål:
@@ -64,9 +65,9 @@ def main():
                    extensions.st_y(extensions.st_transform(extensions.st_centroid(r.geom), 4326))
             from rute250 r
             where (select count(*) from rute_reisetid t
-                   where t.ssbid = r.ssbid and t.maal_id = any(%s) and t.beregnet_for >= %s - 60 and t.versjon >= %s) < %s
+                   where t.ssbid = r.ssbid and t.maal_id = any(%s) and t.beregnet_for >= %s - %s and t.versjon >= %s) < %s
             order by r.ssbid
-        """, ([m[0] for m in mål], dag, VERSJON, len(mål))).fetchall()
+        """, ([m[0] for m in mål], dag, FERSK_DAGER, VERSJON, len(mål))).fetchall()
 
     if not ruter:
         print("Alle ruter har ferske reisetider")
@@ -105,6 +106,9 @@ def main():
         med = next((c for c in tidkol if c.endswith("_p50")), tidkol[-1])
         tall = lambda v: None if pd.isna(v) else int(v)
         rader = [(r["from_id"], r["to_id"], tall(r[rask]), tall(r[med]), dag, VERSJON) for r in df.to_dict("records")]
+        # ruter r5py ikke klarer å knytte til veinettet får tom tid, så de ikke regnes på nytt hver gang
+        med_svar = {(r[0], r[1]) for r in rader}
+        rader += [(r[0], m[0], None, None, dag, VERSJON) for r in del_ for m in mål if (r[0], m[0]) not in med_svar]
         tid_kol = rask
         with koble_til(url) as conn, conn.cursor() as cur:
             cur.executemany(

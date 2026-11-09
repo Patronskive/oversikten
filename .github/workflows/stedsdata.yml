@@ -1,13 +1,15 @@
 name: Stedsdata
 
 on:
+  schedule:
+    - cron: "17 3 * * 0"  # søndag natt: holder databasen aktiv og frisker opp gamle reisetider
   workflow_dispatch:
     inputs:
       steg:
         description: Hva skal kjøres
         type: choice
         default: alt
-        options: [alt, rutenett, grunnkretser, statistikk, osm, stedsnavn, reisetid, eksport, tabeller, meta]
+        options: [alt, sjekk, rutenett, grunnkretser, statistikk, osm, stedsnavn, reisetid, eksport, tabeller, meta]
 
 permissions:
   contents: write
@@ -28,13 +30,17 @@ jobs:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: pipeline/requirements.txt
+      - name: Installer pakker
+        run: pip install -r requirements.txt
+      - name: Ukentlig sjekk av databasen
+        id: sjekk
+        if: github.event_name == 'schedule' || inputs.steg == 'sjekk'
+        run: python vedlikehold.py
       - uses: actions/setup-java@v4
-        if: inputs.steg == 'alt' || inputs.steg == 'reisetid'
+        if: inputs.steg == 'alt' || inputs.steg == 'reisetid' || steps.sjekk.outputs.reisetid == 'utdatert'
         with:
           distribution: temurin
           java-version: "21"
-      - name: Installer pakker
-        run: pip install -r requirements.txt
       - name: Befolkning på 250 m-rutenett
         if: inputs.steg == 'alt' || inputs.steg == 'rutenett'
         run: python ssb_rutenett.py
@@ -65,7 +71,7 @@ jobs:
           osmium export steder.osm.pbf --geometry-types=point -f geojsonseq -o steder.geojsonseq --overwrite
           python -u stedsnavn.py steder.geojsonseq
       - name: Reisetid med kollektiv
-        if: inputs.steg == 'alt' || inputs.steg == 'reisetid'
+        if: inputs.steg == 'alt' || inputs.steg == 'reisetid' || steps.sjekk.outputs.reisetid == 'utdatert'
         run: |
           if [ ! -f region.osm.pbf ]; then
             sudo apt-get update -qq && sudo apt-get install -y -qq osmium-tool
@@ -80,7 +86,7 @@ jobs:
           rm gtfs.zip
           python -u reisetid.py region.osm.pbf gtfs_region.zip --max-memory 13G
       - name: Eksporter data til appen
-        if: inputs.steg == 'alt' || inputs.steg == 'eksport'
+        if: inputs.steg == 'alt' || inputs.steg == 'eksport' || steps.sjekk.outputs.reisetid == 'utdatert'
         run: |
           python eksport.py ../data/stedsdata.json
           cd ..
