@@ -9,7 +9,7 @@ on:
         description: Hva skal kjøres
         type: choice
         default: alt
-        options: [alt, sjekk, rutenett, grunnkretser, statistikk, osm, stedsnavn, reisetid, eksport, tabeller, meta]
+        options: [alt, sjekk, rutenett, grunnkretser, statistikk, osm, stedsnavn, holdeplasser, reisetid, eksport, tabeller, meta]
 
 permissions:
   contents: write
@@ -70,6 +70,13 @@ jobs:
           osmium tags-filter region.osm.pbf n/place=city,town,village,suburb,quarter,neighbourhood,hamlet -o steder.osm.pbf --overwrite
           osmium export steder.osm.pbf --geometry-types=point -f geojsonseq -o steder.geojsonseq --overwrite
           python -u stedsnavn.py steder.geojsonseq
+      - name: Holdeplasser
+        if: inputs.steg == 'holdeplasser'
+        run: |
+          curl -sSfL -o gtfs.zip https://storage.googleapis.com/marduk-production/outbound/gtfs/rb_norway-aggregated-gtfs.zip
+          python gtfs_utsnitt.py gtfs.zip gtfs_region.zip
+          rm gtfs.zip
+          python -u holdeplasser.py gtfs_region.zip
       - name: Reisetid med kollektiv
         if: inputs.steg == 'alt' || inputs.steg == 'reisetid' || steps.sjekk.outputs.reisetid == 'utdatert'
         run: |
@@ -84,9 +91,10 @@ jobs:
           curl -sSfL -o gtfs.zip https://storage.googleapis.com/marduk-production/outbound/gtfs/rb_norway-aggregated-gtfs.zip
           python gtfs_utsnitt.py gtfs.zip gtfs_region.zip
           rm gtfs.zip
+          python -u holdeplasser.py gtfs_region.zip
           python -u reisetid.py region.osm.pbf gtfs_region.zip --max-memory 13G
       - name: Eksporter data til appen
-        if: inputs.steg == 'alt' || inputs.steg == 'eksport' || steps.sjekk.outputs.reisetid == 'utdatert'
+        if: inputs.steg == 'alt' || inputs.steg == 'eksport' || inputs.steg == 'holdeplasser' || steps.sjekk.outputs.reisetid == 'utdatert'
         run: |
           python eksport.py ../data/stedsdata.json
           cd ..

@@ -76,6 +76,11 @@ def main():
         except Exception:
             conn.rollback()
             steder = []
+        try:
+            holdeplasser = conn.execute("select navn, typer, round(lon::numeric, 5), round(lat::numeric, 5) from holdeplass order by typer desc, navn").fetchall()
+        except Exception:
+            conn.rollback()
+            holdeplasser = []
         aar = conn.execute("select max(aar) from rute250").fetchone()[0]
         mål = conn.execute("select id, navn from reisemal where aktiv order by rekkefolge").fetchall()
         reise, reise_med = {}, {}
@@ -102,6 +107,7 @@ def main():
         "delomrader": [{"nr": r[0], "navn": r[1], "inntekt": r[2]} for r in do_rader],
         "grunnkretser": [r[1] for r in gk_rader],
         "steder": [[r[0], r[1], float(r[2]), float(r[3]), r[4]] for r in steder],
+        "holdeplasser": [[r[0], r[1], float(r[2]), float(r[3])] for r in holdeplasser],
         "ruter": {"lon": [], "lat": [], "bosatte": [], "kommune": [], "delomrade": [], "grunnkrets": [], "barn_pst": [],
                   **{f: [] for f in FELT}, "reise": {m[0]: [] for m in mål if m[0] in reise},
                   "reise_median": {m[0]: [] for m in mål if m[0] in reise}},
