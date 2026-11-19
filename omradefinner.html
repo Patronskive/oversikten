@@ -63,6 +63,8 @@ canvas:active { cursor: grabbing; }
 }
 .legende span { display: inline-flex; align-items: center; gap: 5px; }
 .legende i { width: 11px; height: 11px; border-radius: 2px; display: inline-block; }
+.legende .rad { flex-basis: 100%; display: flex; gap: 10px; flex-wrap: wrap; color: var(--muted); }
+.legende svg { width: 11px; height: 11px; display: block; }
 .zoom { position: absolute; right: max(12px, env(safe-area-inset-right, 0px)); top: 12px; display: flex; flex-direction: column; gap: 6px; }
 .zoom button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .zoom button svg { width: 20px; height: 20px; display: block; margin: auto; }
@@ -145,6 +147,7 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
         <button id="ut" aria-label="Zoom ut">−</button>
         <button id="hjem" aria-label="Vis hele regionen">⤢</button>
         <button id="bakgrunn" aria-label="Bakgrunnskart" aria-pressed="true" title="Bakgrunnskart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15M15 6v15"/></svg></button>
+        <button id="holdeknapp" aria-label="Holdeplasser" aria-pressed="true" title="Stasjoner og holdeplasser"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="3" width="14" height="14" rx="3"/><path d="M5 11h14M9 21l-2-4M15 21l2-4"/><circle cx="9" cy="14" r=".6" fill="currentColor"/><circle cx="15" cy="14" r=".6" fill="currentColor"/></svg></button>
       </div>
       <div class="attr" id="attr" hidden>Kart © Kartverket · Stedsnavn © OpenStreetMap</div>
       <div class="legende" id="legende"></div>
@@ -250,13 +253,13 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
     { id: "bos", navn: "Bosatte per rute", felt: "bosatte", type: "pers", maks: 400, nær: false },
   ];
 
-  let tilstand = { modus: "krit", lag: "tog", krav: {}, bakgrunn: true, finn: { typer: [] } };
+  let tilstand = { modus: "krit", lag: "tog", krav: {}, bakgrunn: true, holdeplasser: true, finn: { typer: [] } };
   KRAV.forEach(k => tilstand.krav[k.id] = { på: k.på, v: k.std, tillegg: true });
   try { const s = JSON.parse(localStorage.getItem("omradefinner") || "null"); if (s && s.krav) tilstand = Object.assign(tilstand, s, { krav: Object.assign(tilstand.krav, s.krav) }); } catch (e) {}
   function lagre() { try { localStorage.setItem("omradefinner", JSON.stringify(tilstand)); } catch (e) {} }
 
   // ---------- data ----------
-  let D, n = 0, X, Y, IX, IY, rutekart, status, klyngeAv, klynger = [], kommuner = [], steder = [], valgt = -1;
+  let D, n = 0, X, Y, IX, IY, rutekart, status, klyngeAv, klynger = [], kommuner = [], steder = [], holdeplasser = [], valgt = -1;
   const el = id => document.getElementById(id);
 
   fetch("data/stedsdata.json").then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(start)
@@ -275,6 +278,14 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
     R.inntekt = R.delomrade.map(d => d == null ? null : D.delomrader[d].inntekt);
     kommuner = D.kommuner.map(k => ({ navn: k.navn, nr: k.nr, inntekt: k.inntekt, ringer: tilUtmRinger(k.geom) }));
     steder = (D.steder || []).map(([navn, rang, lon, lat, folk]) => { const [x, y] = utm(lon, lat); return { navn, rang, x, y, folk }; });
+    holdeplasser = (D.holdeplasser || []).map(([navn, typer, lon, lat]) => { const [x, y] = utm(lon, lat); return { navn, typer, x, y, hoved: HOLD_TYPER.find(t => typer & t.bit) }; }).filter(h => h.hoved);
+    // bussholdeplass med samme navn som en stasjon like ved (Sørumsand stasjon o.l.) vises ikke to ganger
+    // bare holdeplasser i eller ved regionen (innen ca. 1 km fra en befolket rute)
+    holdeplasser = holdeplasser.filter(h => { const ix = Math.floor(h.x / 250), iy = Math.floor(h.y / 250);
+      for (let dx = -4; dx <= 4; dx++) for (let dy = -4; dy <= 4; dy++) if (rutekart.has((ix + dx) * 100000 + iy + dy)) return true; return false; });
+    const stasjoner = holdeplasser.filter(h => h.hoved.id !== "buss");
+    holdeplasser = holdeplasser.filter(h => h.hoved.id !== "buss" || !stasjoner.some(s => s.navn === h.navn && Math.abs(s.x - h.x) < 400 && Math.abs(s.y - h.y) < 400));
+    el("holdeknapp").hidden = !holdeplasser.length;
     if (D.maal && D.maal.length && R.reise) {
       KRAV.unshift({ id: "reise", navn: "Reisetid med kollektiv", type: "reise", min: 10, max: 120, steg: 5, std: 45, på: true });
       if (R.reise_median) {
@@ -288,6 +299,7 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
     el("kilder").textContent = "Kilder: " + D.kilder.join(" · ") + ". Befolkning per " + D.befolkningsaar + ", data hentet " + D.laget + ".";
     el("status").hidden = true;
     el("bakgrunn").setAttribute("aria-pressed", tilstand.bakgrunn !== false);
+    el("holdeknapp").setAttribute("aria-pressed", tilstand.holdeplasser !== false);
     byggPanel(); byggBoligfilter(); tilpass(); hjem(); beregn();
   }
   function vent(maal, i) {
@@ -629,12 +641,52 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
     ctx.restore(); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     return tegnet > 0;
   }
+  el("holdeknapp").onclick = () => { tilstand.holdeplasser = !tilstand.holdeplasser; el("holdeknapp").setAttribute("aria-pressed", tilstand.holdeplasser); legende(); tegn(); lagre(); };
   el("bakgrunn").onclick = () => { tilstand.bakgrunn = !tilstand.bakgrunn; el("bakgrunn").setAttribute("aria-pressed", tilstand.bakgrunn); tegn(); lagre(); };
 
   // ---------- navn i kartet ----------
+  // stasjoner og holdeplasser: ulik form per transportmiddel (ikke avhengig av farge)
+  const HOLD_TYPER = [
+    { bit: 1, id: "tog", navn: "Tog", fra: 0.0015, navnFra: 0.01 },
+    { bit: 2, id: "tbane", navn: "T-bane", fra: 0.005, navnFra: 0.02 },
+    { bit: 4, id: "trikk", navn: "Trikk", fra: 0.012, navnFra: 0.05 },
+    { bit: 16, id: "bat", navn: "Båt", fra: 0.006, navnFra: 0.03 },
+    { bit: 8, id: "buss", navn: "Buss", fra: 0.04, navnFra: 0.1 },
+  ];
+  function holdeSymbol(c, id, x, y, r) {  // legger til en delsti; kalleren fyller alle av samme type samlet
+    if (id === "tog") c.rect(x - r, y - r, 2 * r, 2 * r);
+    else if (id === "tbane") { c.moveTo(x + r, y); c.arc(x, y, r, 0, 7); }
+    else if (id === "trikk") { c.moveTo(x, y - r * 1.25); c.lineTo(x + r * 1.25, y); c.lineTo(x, y + r * 1.25); c.lineTo(x - r * 1.25, y); c.closePath(); }
+    else if (id === "bat") { c.moveTo(x, y - r * 1.2); c.lineTo(x + r * 1.2, y + r * 0.9); c.lineTo(x - r * 1.2, y + r * 0.9); c.closePath(); }
+    else { c.moveTo(x + r * 0.75, y); c.arc(x, y, r * 0.75, 0, 7); }
+  }
+  function synligeHoldeplasser(sx, sy) {
+    if (!tilstand.holdeplasser || !holdeplasser.length) return [];
+    const ut = [];
+    for (const h of holdeplasser) {
+      if (skala < h.hoved.fra) continue;
+      const x = sx(h.x), y = sy(h.y); if (x < -10 || x > B + 10 || y < -10 || y > H + 10) continue;
+      ut.push([h, x, y]);
+    }
+    return ut;
+  }
+  function tegnHoldeplasser(liste) {
+    const ink = css("--ink"), flate = css("--surface"), rs = skala < 0.004 ? 2.2 : skala < 0.01 ? 3 : 4.5;
+    // buss først, så tog øverst
+    for (let k = HOLD_TYPER.length - 1; k >= 0; k--) {
+      const t = HOLD_TYPER[k], r = t.id === "buss" ? (skala >= 0.08 ? 4 : 3) : rs;
+      ctx.beginPath();
+      for (const [h, x, y] of liste) if (h.hoved === t) holdeSymbol(ctx, t.id, x, y, r);
+      ctx.lineWidth = rs < 3 ? 1 : 2; ctx.strokeStyle = flate; ctx.stroke();
+      if (t.id === "buss") { ctx.fillStyle = flate; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = ink; ctx.stroke(); }
+      else { ctx.fillStyle = ink; ctx.fill(); }
+    }
+  }
   function tegnNavn(sx, sy) {
     const font = css("--font"), opptatt = [];
     const ledig = (x0, y0, x1, y1) => { if (x1 < 0 || x0 > B || y1 < 0 || y0 > H) return false; for (const r of opptatt) if (x0 < r[2] && x1 > r[0] && y0 < r[3] && y1 > r[1]) return false; opptatt.push([x0, y0, x1, y1]); return true; };
+    const hp = synligeHoldeplasser(sx, sy);
+    tegnHoldeplasser(hp);
     ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
     ctx.strokeStyle = css("--surface"); ctx.lineWidth = 3;
     const maksRang = skala < 0.004 ? 2 : skala < 0.012 ? 3 : skala < 0.05 ? 4 : 5;
@@ -647,6 +699,19 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
       ctx.fillStyle = css(s.rang <= 3 ? "--ink" : "--muted");
       ctx.strokeText(s.navn, x, y); ctx.fillText(s.navn, x, y);
     }
+    // navn på stasjoner og holdeplasser, til høyre for symbolet, når det er plass
+    ctx.textAlign = "left";
+    for (const t of HOLD_TYPER) {
+      if (skala < t.navnFra) continue;
+      ctx.font = `${t.id === "tog" ? 600 : 500} 11px ${font}`; ctx.fillStyle = css(t.id === "buss" ? "--muted" : "--ink");
+      for (const [h, x, y] of hp) {
+        if (h.hoved !== t) continue;
+        const b = ctx.measureText(h.navn).width, x0 = x + 8;
+        if (!ledig(x0 - 2, y - 7, x0 + b + 2, y + 7)) continue;
+        ctx.strokeText(h.navn, x0, y); ctx.fillText(h.navn, x0, y);
+      }
+    }
+    ctx.textAlign = "center";
     if (skala < 0.006) {
       ctx.font = "600 11px " + font; ctx.fillStyle = css("--muted");
       kommuner.forEach(k => { let mx = 0, my = 0, c = 0; k.ringer[0].forEach(([x, y]) => { mx += x; my += y; c++; });
@@ -656,11 +721,19 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
     ctx.textBaseline = "alphabetic";
   }
 
+  function holdeLegende() {
+    if (!tilstand.holdeplasser || !holdeplasser.length) return "";
+    const ikon = t => { const d = { tog: '<rect x="2" y="2" width="7" height="7" fill="currentColor"/>', tbane: '<circle cx="5.5" cy="5.5" r="3.8" fill="currentColor"/>',
+      trikk: '<path d="M5.5 1L10 5.5 5.5 10 1 5.5z" fill="currentColor"/>', bat: '<path d="M5.5 1.5L10 9.5H1z" fill="currentColor"/>',
+      buss: '<circle cx="5.5" cy="5.5" r="3" fill="var(--surface)" stroke="currentColor" stroke-width="1.5"/>' }[t.id];
+      return `<span><svg viewBox="0 0 11 11" aria-hidden="true" style="color:var(--ink)">${d}</svg>${t.navn}</span>`; };
+    return `<div class="rad">${HOLD_TYPER.map(ikon).join("")}</div>`;
+  }
   function legende() {
     const L = el("legende");
-    if (tilstand.modus === "krit") L.innerHTML = `<span><i style="background:var(--match);outline:1.5px solid var(--match-kant);outline-offset:-1.5px"></i>Alle krav</span><span><i style="background:var(--near)"></i>Bommer på ett</span><span><i style="background:transparent;outline:1px solid var(--line)"></i>Flere</span>`;
+    if (tilstand.modus === "krit") L.innerHTML = `<span><i style="background:var(--match);outline:1.5px solid var(--match-kant);outline-offset:-1.5px"></i>Alle krav</span><span><i style="background:var(--near)"></i>Bommer på ett</span><span><i style="background:transparent;outline:1px solid var(--line)"></i>Flere</span>` + holdeLegende();
     else { const l = LAG.find(a => a.id === tilstand.lag); const svak = l.nær ? "Langt unna" : "Lavt", sterk = l.nær ? "Nært" : "Høyt";
-      L.innerHTML = `<span><i style="background:var(--match);opacity:.18"></i>${svak}</span><span><i style="background:var(--match)"></i>${sterk}</span><span><i style="background:var(--miss);outline:1px solid var(--line)"></i>Mangler</span>`; }
+      L.innerHTML = `<span><i style="background:var(--match);opacity:.18"></i>${svak}</span><span><i style="background:var(--match)"></i>${sterk}</span><span><i style="background:var(--miss);outline:1px solid var(--line)"></i>Mangler</span>` + holdeLegende(); }
   }
 
   // panorering, zoom og trykk
@@ -698,5 +771,4 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
 })();
 </script>
 
-</body>
-</html>
+</body></html>
