@@ -68,6 +68,9 @@ canvas:active { cursor: grabbing; }
 .zoom { position: absolute; right: max(12px, env(safe-area-inset-right, 0px)); top: 12px; display: flex; flex-direction: column; gap: 6px; }
 .zoom button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .zoom button svg { width: 20px; height: 20px; display: block; margin: auto; }
+.finnutsnitt { position: absolute; left: max(12px, env(safe-area-inset-left, 0px)); top: 12px; display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 14px; border-radius: 8px;
+  background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 13px; text-decoration: none; box-shadow: 0 1px 3px rgb(0 0 0 / .18); max-width: calc(100% - 80px); }
+.finnutsnitt small { font-weight: 500; opacity: .85; font-size: 12px; }
 .attr { position: absolute; right: max(8px, env(safe-area-inset-right, 0px)); bottom: 4px; font-size: 10px; color: var(--muted); background: color-mix(in srgb, var(--surface) 75%, transparent); padding: 1px 5px; border-radius: 4px; pointer-events: none; }
 .undertittel { margin: -2px 0 6px; color: var(--muted); font-size: 13px; }
 .zoom button { width: 40px; height: 40px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: 600 18px var(--font); cursor: pointer; }
@@ -149,6 +152,7 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
         <button id="bakgrunn" aria-label="Bakgrunnskart" aria-pressed="true" title="Bakgrunnskart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15M15 6v15"/></svg></button>
         <button id="holdeknapp" aria-label="Holdeplasser" aria-pressed="true" title="Stasjoner og holdeplasser"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="3" width="14" height="14" rx="3"/><path d="M5 11h14M9 21l-2-4M15 21l2-4"/><circle cx="9" cy="14" r=".6" fill="currentColor"/><circle cx="15" cy="14" r=".6" fill="currentColor"/></svg></button>
       </div>
+      <a class="finnutsnitt" id="finnUtsnitt" target="_blank" rel="noopener" hidden title="Søk på FINN etter boliger i treffrutene du ser på kartet nå">FINN i kartutsnittet <small id="finnUtsnittKm"></small> ↗</a>
       <div class="attr" id="attr" hidden>Kart © Kartverket · Stedsnavn © OpenStreetMap</div>
       <div class="legende" id="legende"></div>
     </div>
@@ -411,19 +415,152 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
   let lenkeTid;
   function oppdaterLenker() { lagre(); clearTimeout(lenkeTid); lenkeTid = setTimeout(() => { visTreff(); if (valgt >= 0) visDetalj(valgt, true); }, 250); }
 
-  // ---------- FINN-lenke: omriss (konveks innhylling) rundt rutene, som polylocation ----------
-  function finnLenke(ruter, kant) {
-    const pk = [];
-    ruter.forEach(j => { const x = IX[j] * 250, y = IY[j] * 250;
-      pk.push([x - kant, y - kant], [x + 250 + kant, y - kant], [x - kant, y + 250 + kant], [x + 250 + kant, y + 250 + kant]); });
-    pk.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  // ---------- FINN-lenke: søkeområde som polylocation ----------
+  // Omrisset følger treffrutene (med ca. 125 m margin) i stedet for en konveks innhylling,
+  // så lange eller buede områder ikke drar med seg store arealer som ikke passer.
+  function konveks(pk) {
+    pk = pk.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
     const kryss = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
     const ned = [], opp = [];
     for (const q of pk) { while (ned.length >= 2 && kryss(ned[ned.length - 2], ned[ned.length - 1], q) <= 0) ned.pop(); ned.push(q); }
     for (let i = pk.length - 1; i >= 0; i--) { const q = pk[i]; while (opp.length >= 2 && kryss(opp[opp.length - 2], opp[opp.length - 1], q) <= 0) opp.pop(); opp.push(q); }
-    const hull = ned.slice(0, -1).concat(opp.slice(0, -1)); hull.push(hull[0]);
-    const tekst = hull.map(([x, y]) => { const [lo, la] = utmInv(x, y); return lo.toFixed(5) + " " + la.toFixed(5); }).join(",");
+    return ned.slice(0, -1).concat(opp.slice(0, -1));
+  }
+  function hjørner(ruter, kant) {
+    const pk = [];
+    ruter.forEach(j => { const x = IX[j] * 250, y = IY[j] * 250;
+      pk.push([x - kant, y - kant], [x + 250 + kant, y - kant], [x - kant, y + 250 + kant], [x + 250 + kant, y + 250 + kant]); });
+    return pk;
+  }
+  function forenkle(p, tol) {  // Douglas–Peucker på lukket ring (uten gjentatt startpunkt)
+    if (p.length < 5) return p;
+    const ring = p.concat([p[0]]);
+    const dp = (a, b) => {
+      const [x1, y1] = ring[a], [x2, y2] = ring[b], dx = x2 - x1, dy = y2 - y1, l = Math.hypot(dx, dy) || 1;
+      let mx = -1, mi = -1;
+      for (let i = a + 1; i < b; i++) { const d = Math.abs(dy * ring[i][0] - dx * ring[i][1] + x2 * y1 - y2 * x1) / l; if (d > mx) { mx = d; mi = i; } }
+      return mx > tol ? dp(a, mi).concat(dp(mi, b).slice(1)) : [ring[a], ring[b]];
+    };
+    // del ringen i to ved punktet lengst fra start
+    let fj = 1, md = -1; p.forEach((q, i) => { const d = (q[0] - p[0][0]) ** 2 + (q[1] - p[0][1]) ** 2; if (d > md) { md = d; fj = i; } });
+    return dp(0, fj).concat(dp(fj, ring.length - 1).slice(1, -1));
+  }
+  // omriss av rutene på et 125 m-rutenett: utvid én halv rute, fyll hull, følg yttergrensen.
+  // Ligger rutene i flere adskilte grupper, gir funksjonen null – eller, med bro = true, binder gruppene
+  // sammen med smale korridorer (ca. 250 m brede) så FINN fortsatt får ett polygon som følger treffene.
+  function omriss(ruter, bro) {
+    if (!ruter.length) return null;
+    let a0 = 1e9, a1 = -1e9, b0 = 1e9, b1 = -1e9;
+    ruter.forEach(j => { a0 = Math.min(a0, IX[j]); a1 = Math.max(a1, IX[j]); b0 = Math.min(b0, IY[j]); b1 = Math.max(b1, IY[j]); });
+    const W = (a1 - a0 + 1) * 2 + 4, H2 = (b1 - b0 + 1) * 2 + 4, g = new Uint8Array(W * H2);
+    ruter.forEach(j => { const u = (IX[j] - a0) * 2 + 2, v = (IY[j] - b0) * 2 + 2; g[v * W + u] = g[v * W + u + 1] = g[(v + 1) * W + u] = g[(v + 1) * W + u + 1] = 1; });
+    const d = new Uint8Array(W * H2);
+    for (let v = 1; v < H2 - 1; v++) for (let u = 1; u < W - 1; u++) {
+      let f = 0; for (let dv = -1; dv <= 1 && !f; dv++) for (let du = -1; du <= 1; du++) if (g[(v + dv) * W + u + du]) { f = 1; break; }
+      d[v * W + u] = f;
+    }
+    // utsiden: flomfyll fra kanten; alt annet (også hull) regnes som innside
+    const N4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    let ute;
+    const flom = () => { ute = new Uint8Array(W * H2); const kø = [0]; ute[0] = 1;
+      while (kø.length) { const k = kø.pop(), u = k % W, v = (k - u) / W;
+        for (const [du, dv] of N4) { const uu = u + du, vv = v + dv; if (uu < 0 || vv < 0 || uu >= W || vv >= H2) continue; const kk = vv * W + uu; if (!ute[kk] && !d[kk]) { ute[kk] = 1; kø.push(kk); } } } };
+    flom();
+    const inne = k => !ute[k];
+    // del i sammenhengende grupper
+    const merke = () => { const lab = new Int32Array(W * H2).fill(-1), grupper = [];
+      for (let k0 = 0; k0 < W * H2; k0++) { if (!inne(k0) || lab[k0] >= 0) continue; const g2 = [], q = [k0]; lab[k0] = grupper.length;
+        while (q.length) { const k = q.pop(), u = k % W, v = (k - u) / W; g2.push(k);
+          for (const [du, dv] of N4) { const kk = (v + dv) * W + u + du; if (lab[kk] < 0 && inne(kk)) { lab[kk] = grupper.length; q.push(kk); } } }
+        grupper.push(g2); }
+      return grupper; };
+    let grupper = merke();
+    if (grupper.length > 1) {
+      if (!bro || grupper.length > 80) return null;
+      // minste spenntre mellom gruppene (Prim), avstand målt mellom et utvalg punkter i hver gruppe
+      const utvalg = grupper.map(g2 => { const st = Math.max(1, Math.floor(g2.length / 60)); const r = []; for (let i = 0; i < g2.length; i += st) r.push([g2[i] % W, Math.floor(g2[i] / W)]); return r; });
+      const nær = (a, b) => { let best = [1e18, null, null]; for (const p of utvalg[a]) for (const q of utvalg[b]) { const dd = (p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2; if (dd < best[0]) best = [dd, p, q]; } return best; };
+      const med = [0], igjen = new Set(grupper.map((_, i) => i).slice(1));
+      while (igjen.size) {
+        let best = [1e18], bi = -1;
+        for (const a of med) for (const b of igjen) { const r = nær(a, b); if (r[0] < best[0]) { best = r; bi = b; } }
+        // korridor: rett linje, 2 delruter bred så den henger sammen
+        const [, p, q] = best, steg = Math.max(Math.abs(q[0] - p[0]), Math.abs(q[1] - p[1])) || 1;
+        for (let t = 0; t <= steg; t++) { const u = Math.round(p[0] + (q[0] - p[0]) * t / steg), v = Math.round(p[1] + (q[1] - p[1]) * t / steg);
+          d[v * W + u] = d[v * W + u + 1] = d[(v + 1) * W + u] = d[(v + 1) * W + u + 1] = 1; }
+        med.push(bi); igjen.delete(bi);
+      }
+      flom(); grupper = merke(); if (grupper.length !== 1) return null;
+    }
+    let første = -1; for (let k = 0; k < W * H2; k++) if (inne(k)) { første = k; break; }
+    // kanter med innsiden til venstre (y opp), hjørnenøkkel = v*(W+1)+u
+    const ut = new Map(), nøkkel = (u, v) => v * (W + 1) + u, legg = (a, b) => { if (!ut.has(a)) ut.set(a, []); ut.get(a).push(b); };
+    for (let v = 1; v < H2 - 1; v++) for (let u = 1; u < W - 1; u++) {
+      const k = v * W + u; if (!inne(k)) continue;
+      if (!inne(k - W)) legg(nøkkel(u, v), nøkkel(u + 1, v));
+      if (!inne(k + 1)) legg(nøkkel(u + 1, v), nøkkel(u + 1, v + 1));
+      if (!inne(k + W)) legg(nøkkel(u + 1, v + 1), nøkkel(u, v + 1));
+      if (!inne(k - 1)) legg(nøkkel(u, v + 1), nøkkel(u, v));
+    }
+    let antKanter = 0; ut.forEach(l => antKanter += l.length);
+    const fu = første % W, fv = (første - fu) / W, start = nøkkel(fu, fv);
+    const pkt = [], xy = n => [n % (W + 1), Math.floor(n / (W + 1))];
+    let cur = start, forrige = null, brukt = 0;
+    do {
+      const l = ut.get(cur); if (!l || !l.length) return null;
+      let i = 0;
+      if (l.length > 1 && forrige != null) {  // klemt hjørne: sving til venstre
+        const [pu, pv] = xy(forrige), [cu, cv] = xy(cur), inn = [cu - pu, cv - pv];
+        i = l.findIndex(nb => { const [nu, nv] = xy(nb); return inn[0] * (nv - cv) - inn[1] * (nu - cu) > 0; }); if (i < 0) i = 0;
+      }
+      const neste = l.splice(i, 1)[0]; pkt.push(xy(cur)); forrige = cur; cur = neste; brukt++;
+    } while (cur !== start && brukt <= antKanter);
+    if (brukt !== antKanter) return null;
+    // fjern punkter på rett linje, gjør om til meter og forenkle til høyst ca. 60 punkter
+    let ring = pkt.filter((p, i) => { const a = pkt[(i - 1 + pkt.length) % pkt.length], b = pkt[(i + 1) % pkt.length]; return (p[0] - a[0]) * (b[1] - p[1]) !== (p[1] - a[1]) * (b[0] - p[0]); })
+      .map(([u, v]) => [(u - 2) * 125 + a0 * 250, (v - 2) * 125 + b0 * 250]);
+    for (let tol = 40, r = ring; ; tol *= 1.5) { r = forenkle(ring, tol); if (r.length <= 100 || tol > 2000) { ring = r; break; } }
+    return ring;
+  }
+  function areal(ring) { let a = 0; ring.forEach((p, i) => { const q = ring[(i + 1) % ring.length]; a += p[0] * q[1] - q[0] * p[1]; }); return Math.abs(a) / 2e6; }
+  function finnUrl(ring) {
+    const r = ring.concat([ring[0]]);
+    const tekst = r.map(([x, y]) => { const [lo, la] = utmInv(x, y); return lo.toFixed(5) + " " + la.toFixed(5); }).join(",");
     return "https://www.finn.no/realestate/homes/search.html?polylocation=" + encodeURIComponent(tekst).replace(/%20/g, "+") + finnFilter();
+  }
+  function søkeområde(ruter) { return omriss(ruter) || konveks(hjørner(ruter, 75)); }
+  function finnLenke(ruter, kant) { return finnUrl(kant > 250 ? konveks(hjørner(ruter, kant)) : søkeområde(ruter)); }
+  function kmTekst(ring) { const a = areal(ring); return (a < 10 ? a.toFixed(1).replace(".", ",") : Math.round(a)) + " km²"; }
+  function klyngeOmråde(k) { return k.ring || (k.ring = søkeområde(k.ruter)); }
+
+  // FINN-søk avgrenset til det som vises på kartet: treffrutene i utsnittet, klippet mot kartkanten
+  function klipp(ring, x0, y0, x1, y1) {
+    const kant = [[p => p[0] >= x0, (a, b) => { const t = (x0 - a[0]) / (b[0] - a[0]); return [x0, a[1] + t * (b[1] - a[1])]; }],
+      [p => p[0] <= x1, (a, b) => { const t = (x1 - a[0]) / (b[0] - a[0]); return [x1, a[1] + t * (b[1] - a[1])]; }],
+      [p => p[1] >= y0, (a, b) => { const t = (y0 - a[1]) / (b[1] - a[1]); return [a[0] + t * (b[0] - a[0]), y0]; }],
+      [p => p[1] <= y1, (a, b) => { const t = (y1 - a[1]) / (b[1] - a[1]); return [a[0] + t * (b[0] - a[0]), y1]; }]];
+    let ut = ring;
+    for (const [inne, kryss] of kant) {
+      const inn = ut; ut = [];
+      inn.forEach((p, i) => { const a = inn[(i - 1 + inn.length) % inn.length];
+        if (inne(p)) { if (!inne(a)) ut.push(kryss(a, p)); ut.push(p); } else if (inne(a)) ut.push(kryss(a, p)); });
+      if (!ut.length) return [];
+    }
+    return ut;
+  }
+  let utsnittTid;
+  function oppdaterUtsnitt() { clearTimeout(utsnittTid); utsnittTid = setTimeout(utsnittNå, 250); }
+  function utsnittNå() {
+    const a = el("finnUtsnitt");
+    if (!D || tilstand.modus !== "krit" || !B) { a.hidden = true; return; }
+    const x0 = ox, x1 = ox + B / skala, y1 = oy, y0 = oy - H / skala, synlige = [];
+    for (let i = 0; i < n; i++) if (status[i] === 2) { const x = IX[i] * 250, y = IY[i] * 250; if (x + 250 > x0 && x < x1 && y + 250 > y0 && y < y1) synlige.push(i); }
+    if (!synlige.length) { a.hidden = true; return; }
+    let ring = synlige.length <= 6000 ? omriss(synlige, true) : null;
+    if (!ring) ring = konveks(hjørner(synlige, 75));
+    ring = klipp(ring, x0, y0, x1, y1);
+    if (ring.length < 3) { a.hidden = true; return; }
+    a.href = finnUrl(ring); el("finnUtsnittKm").textContent = "· " + kmTekst(ring); a.hidden = false;
   }
 
   // ---------- panel ----------
@@ -475,7 +612,7 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
     if (!klynger.length) { boks.innerHTML = `<p class="tom">Ingen ruter oppfyller alle kravene. Gule ruter bommer på ett krav – prøv å løsne litt på det strengeste.</p>`; return; }
     boks.innerHTML = klynger.slice(0, 60).map((k, i) => `<button data-i="${i}"><span class="merke">${k.ruter.length}</span>
       <span><span class="t1">${k.sted ? k.sted + " · " : ""}${k.kommune}</span><br><span class="t2">${k.delomrade && k.delomrade !== k.sted ? k.delomrade + " · " : ""}${k.bos.toLocaleString("nb-NO")} bosatte · ${(k.ruter.length * 0.0625).toFixed(1).replace(".", ",")} km²</span></span><span aria-hidden="true">›</span></button>
-      <a class="finn" href="${finnLenke(k.ruter, 75)}" target="_blank" rel="noopener">Se boliger i området på FINN ↗</a>`).join("")
+      <a class="finn" href="${finnUrl(klyngeOmråde(k))}" target="_blank" rel="noopener">Se boliger i området på FINN (${kmTekst(klyngeOmråde(k))}) ↗</a>`).join("")
       + (klynger.length > 60 ? `<p class="tom">Viser de 60 største av ${klynger.length} områder.</p>` : "");
     boks.querySelectorAll("button").forEach(b => b.onclick = () => {
       const k = klynger[+b.dataset.i]; let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
@@ -518,7 +655,7 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
     d.innerHTML = `<h3>${tittel}</h3>${under ? `<p class="undertittel">${under}</p>` : ""}<p class="tom">${st}</p><dl>${rader.map(([a, b, kid]) => {
       const k = kid && KRAV.find(x => x.id === kid); const nei = k && tilstand.krav[kid].på && !oppfylt(k, i);
       return `<dt>${a}</dt><dd class="${nei ? "nei" : ""}">${b}</dd>`; }).join("")}</dl>
-      <div class="lenker">${klyngeAv[i] >= 0 ? `<a class="lenke" href="${finnLenke(klynger[klyngeAv[i]].ruter, 75)}" target="_blank" rel="noopener">Se boliger i hele treffområdet på FINN</a>` : ""}
+      <div class="lenker">${klyngeAv[i] >= 0 ? `<a class="lenke" href="${finnUrl(klyngeOmråde(klynger[klyngeAv[i]]))}" target="_blank" rel="noopener">Se boliger i hele treffområdet på FINN (${kmTekst(klyngeOmråde(klynger[klyngeAv[i]]))})</a>` : ""}
       <a class="lenke${klyngeAv[i] >= 0 ? " sekundær" : ""}" href="${finnLenke([i], 375)}" target="_blank" rel="noopener">Se boliger rundt denne ruta på FINN (ca. 1 km²)</a></div>
       <p class="tom">${R.reise_median ? "Kollektiv er raskeste reise når du tar riktig avgang mellom 07 og 08 en tirsdag" : "Kollektiv er median reisetid ved avreise 07–08 en tirsdag"}${D.reisedag ? " (" + D.reisedag + ")" : ""}, med gange til og fra holdeplass.${R.reise_median ? " Venting er snittet ekstra hvis du går hjemmefra på et tilfeldig tidspunkt – et mål på hvor ofte det går." : ""} Inntekt er median inntekt etter skatt for alle husholdninger (2024). Gangtid går langs veier og stier fra midten av ruta.</p>`;
     if (!stille) fane("tDet"); tegn();
@@ -605,6 +742,7 @@ select { height: 40px; border-radius: 8px; border: 1px solid var(--line); backgr
     }
     tegnNavn(sx, sy);
     if (valgt >= 0) { ctx.strokeStyle = css("--sel"); ctx.lineWidth = 2; ctx.strokeRect(sx(IX[valgt] * 250) - 1, sy(IY[valgt] * 250 + 250) - 1, s + 2, s + 2); }
+    oppdaterUtsnitt();
   }
   // ---------- bakgrunnskart (Kartverket, web mercator-fliser lagt på UTM-kartet) ----------
   const fliser = new Map(); let kartFeil = false, feilAnt = 0, okAnt = 0;
