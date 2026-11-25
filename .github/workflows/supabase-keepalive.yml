@@ -1,0 +1,28 @@
+name: Supabase keep-alive
+
+# Holder Supabase-prosjektet "stedsassistent" våkent, så gratisplanen
+# ikke setter det på pause etter 7 dager uten trafikk.
+on:
+  schedule:
+    - cron: "17 6 */3 * *"   # ca. hver 3. dag kl. 06:17 UTC
+  workflow_dispatch:          # kan også kjøres manuelt fra Actions-fanen
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Les én rad fra kommune via REST-API-et
+        env:
+          SUPABASE_URL: https://znpoutzszgfuljbjbqca.supabase.co
+          # Publishable-nøkkelen er offentlig og gir kun lesetilgang via RLS
+          SUPABASE_KEY: sb_publishable_JSt8H9m3o39pRnoy3CzKMg_z95rFLTh
+        run: |
+          status=$(curl -s -o response.json -w "%{http_code}" \
+            "$SUPABASE_URL/rest/v1/kommune?select=*&limit=1" \
+            -H "apikey: $SUPABASE_KEY")
+          echo "HTTP $status"
+          head -c 300 response.json; echo
+          if [ "$status" != "200" ]; then
+            echo "::error::Supabase svarte $status – prosjektet kan være pauset."
+            exit 1
+          fi
